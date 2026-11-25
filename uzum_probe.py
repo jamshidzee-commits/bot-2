@@ -1,35 +1,25 @@
-"""Разведка поставки: из каких полей брать размеры (SKU). Пишем только имена полей и счётчики совпадений."""
+"""Сверка поставок: сколько счетов подходит под номер и сколько штук/позиций в каждом (номера частично скрыты)."""
 import os, requests
 KEY = os.environ["UZUM_API_KEY"].strip()
 BASE = "https://api-seller.uzum.uz/api/seller-openapi"
 H = {"Authorization": KEY}
+WANT = ["110004288155", "110004284738", "110004279766", "110004266346", "110004264439", "110004263224"]
 out = []
-get = lambda path, **p: requests.get(BASE + path, headers=H, params=p, timeout=30)
-sku_ids, prod_ids, barcodes = set(), set(), set()
-for sh in get("/v1/shops").json():
-    for page in range(30):
-        r = get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
-        if r.status_code != 200:
-            break
-        lst = r.json().get("productList", [])
-        for pr in lst:
-            prod_ids.add(str(pr["productId"]))
-            for k in pr.get("skuList", []):
-                sku_ids.add(str(k.get("skuId"))); barcodes.add(str(k.get("barcode")))
-        if len(lst) < 20:
-            break
-    break
-out.append(f"каталог: товаров {len(prod_ids)}, sku {len(sku_ids)}")
 inv_all = []
-for page in range(3):
-    inv_all += get("/v1/invoice", page=page, size=50).json()
-for inv in inv_all:
-    if str(inv.get("invoiceNumber")).startswith(("110004288155", "110004284738", "110004279766")):
-        for pd in inv.get("productForInvoiceDto") or []:
-            sk = pd.get("skuForInvoiceDtoList") or []
-            out.append(f"line: keys={sorted(pd.keys())} id_is_sku={str(pd.get('id')) in sku_ids} id_is_product={str(pd.get('id')) in prod_ids} qtyToStock={pd.get('quantityToStock')} nested={len(sk)}")
-            if sk:
-                e = sk[0]
-                out.append("   nested keys=" + ",".join(sorted(e.keys())) + f" | skuId_match={sum(str(x.get('skuId')) in sku_ids for x in sk)}/{len(sk)} barcode_match={sum(str(x.get('barcode')) in barcodes for x in sk)}/{len(sk)} id_match={sum(str(x.get('id')) in sku_ids for x in sk)}/{len(sk)}")
-        break
+for sh in requests.get(BASE + "/v1/shops", headers=H, timeout=30).json():
+    for page in range(30):
+        r = requests.get(BASE + "/v1/invoice", headers=H, params=dict(page=page, size=50, shopId=sh["id"]), timeout=30)
+        if r.status_code != 200 or not r.json():
+            break
+        inv_all += r.json()
+out.append(f"всего счетов получено: {len(inv_all)}")
+for w in WANT:
+    ms = [i for i in inv_all if str(i.get("invoiceNumber")).startswith(w)]
+    out.append(f"{w[:-3]}###: совпадений {len(ms)}")
+    for i in ms:
+        lines = i.get("productForInvoiceDto") or []
+        skus = [k for l in lines for k in (l.get("skuForInvoiceDtoList") or [])]
+        qty_lines = sum(l.get("quantityToStock") or 0 for l in lines)
+        qty_skus = sum(k.get("quantityToStock") or 0 for k in skus)
+        out.append(f"   номер длиной {len(str(i.get('invoiceNumber')))}, статус {(i.get('invoiceStatus') or {}).get('value')}, строк {len(lines)}, sku {len(skus)}, sku с qty>0 {sum(1 for k in skus if (k.get('quantityToStock') or 0) > 0)}, штук по строкам {qty_lines}, штук по sku {qty_skus}, totalToStock {i.get('totalToStock')}")
 open("uzum_probe.txt", "w", encoding="utf-8").write("\n".join(out))
