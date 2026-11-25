@@ -1,5 +1,5 @@
 """Telegram do'kon boti: kanalga mahsulot joylash + buyurtma + to'lov + yetkazib berish (EMU Post)."""
-import os, json, time, html, requests
+import os, re, json, time, html, requests
 
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL = os.environ.get("CHANNEL_ID") or "@Online_magazin12jam"
@@ -185,11 +185,17 @@ def best_img(url):
     return url
 
 UZUM_ERRORS = 0
+UZUM_MATCHED = set()
 
-def uzum_products():
+def sku_codes(k):
+    return {str(x).strip() for x in (k.get("skuId"), k.get("barcode"), k.get("sellerItemCode"), k.get("article")) if x not in (None, "")}
+
+def uzum_products(my=None):
     """Все товары всех магазинов продавца, в наличии."""
-    global UZUM_ERRORS
+    global UZUM_ERRORS, UZUM_MATCHED
     UZUM_ERRORS = 0
+    UZUM_MATCHED = set()
+    my = set(my) if my else None
     out = []
     for sh in uzum_get("/v1/shops"):
         page = 0
@@ -203,7 +209,14 @@ def uzum_products():
                 break
             lst = j.get("productList") or []
             for pr in lst:
-                skus = [k for k in pr.get("skuList", []) if (k.get("quantityAvailable") or 0) > 0 and not k.get("archived") and not k.get("blocked")]
+                if my:  # режим «мой склад»: берём только позиции из твоего списка, остаток Uzum не важен
+                    skus = []
+                    for k in pr.get("skuList", []):
+                        hit = sku_codes(k) & my
+                        if hit:
+                            UZUM_MATCHED |= hit; skus.append(k)
+                else:
+                    skus = [k for k in pr.get("skuList", []) if (k.get("quantityAvailable") or 0) > 0 and not k.get("archived") and not k.get("blocked")]
                 if not skus:
                     continue
                 price = min((k.get("price") or 0) for k in skus) or pr.get("price") or 0
@@ -230,7 +243,7 @@ def uzum_offer(s, chat):
         tg("sendMessage", chat_id=chat, text="Ключ Uzum не подключён (секрет UZUM_API_KEY).")
         return
     try:
-        items = uzum_products()
+        items = uzum_products(s.get("mystock"))
     except Exception as e:
         code = getattr(getattr(e, "response", None), "status_code", "")
         tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum API: {type(e).__name__} {code}")
@@ -283,7 +296,7 @@ def sync_stock(s, chat=None):
     if not UZUM_KEY:
         return
     try:
-        have = {i["id"]: i for i in uzum_products()}
+        have = {i["id"]: i for i in uzum_products(s.get("mystock"))}
     except Exception as e:
         print("sync", repr(e)[:200]); return
     if UZUM_ERRORS:
@@ -503,6 +516,29 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/mystock"):
+            body = text[len("/mystock"):].strip()
+            if body.lower().startswith("clear"):
+                s["mystock"] = []
+                tg("sendMessage", chat_id=chat, text="Список «мой склад» отключён. Теперь наличие берётся из остатков Uzum.")
+                return
+            add = body.lower().startswith("add")
+            if add:
+                body = body[3:]
+            codes = [c for c in re.split(r"[\s,;]+", body) if c]
+            if not codes:
+                tg("sendMessage", chat_id=chat, text=("Список «мой склад»: " + str(len(s.get("mystock", []))) + " кодов.\n\n" if s.get("mystock") else "") +
+                   "Пришлите команду и коды товаров из Uzum (SKU ID, штрихкод или артикул) через пробел, запятую или с новой строки:\n/mystock 123456 789012 ...\nДобавить к списку: /mystock add коды\nОтключить: /mystock clear")
+                return
+            s["mystock"] = sorted(set(s.get("mystock", [])) | set(codes)) if add else sorted(set(codes))
+            try:
+                items = uzum_products(s["mystock"])
+            except Exception as e:
+                tg("sendMessage", chat_id=chat, text=f"Список сохранён, но Uzum не ответил: {type(e).__name__}"); return
+            miss = [c for c in s["mystock"] if c not in UZUM_MATCHED]
+            tg("sendMessage", chat_id=chat, text=f"Список сохранён: {len(s['mystock'])} кодов. Найдено товаров в Uzum: {len(items)}." +
+               (f"\nНе найдены коды ({len(miss)}): " + ", ".join(miss[:30]) if miss else "") + "\n\nЧтобы показать их для публикации: /uzum")
+            return
         if text.startswith("/sync"):
             return sync_stock(s, chat)
         if text.startswith("/list"):
@@ -528,7 +564,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
