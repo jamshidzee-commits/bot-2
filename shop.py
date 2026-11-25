@@ -551,6 +551,25 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/delall"):
+            n = sum(1 for pid in list(s["products"]) if not s["products"][pid].get("hidden") and remove_product(s, pid))
+            tg("sendMessage", chat_id=chat, text=f"Убрано товаров из приложения: {n}. Их посты в канале, которые бот помнит, удалены. Остальные старые посты можно стереть командой /clearchannel yes")
+            return
+        if text.startswith("/clearchannel"):
+            if text.split()[-1].lower() != "yes":
+                tg("sendMessage", chat_id=chat, text="Эта команда удалит последние ~300 сообщений в канале (включая закреплённое). Подтвердите: /clearchannel yes")
+                return
+            r = tg("sendMessage", chat_id=CHANNEL, text="…")
+            if not r.get("ok"):
+                tg("sendMessage", chat_id=chat, text="Не получилось: проверьте права бота в канале."); return
+            top = r["result"]["message_id"]; n = 0
+            for mid in range(top, max(top - 300, 0), -1):
+                if tg("deleteMessage", chat_id=CHANNEL, message_id=mid).get("ok"):
+                    n += 1
+            for p in s["products"].values():
+                p["msgs"] = []
+            tg("sendMessage", chat_id=chat, text=f"Удалено сообщений в канале: {n}. Закреплённую кнопку магазина верните командой /pin")
+            return
         if text.startswith("/supply"):
             nums = [c for c in re.split(r"[\s,;]+", text[len("/supply"):].strip()) if c]
             if not nums:
@@ -571,6 +590,7 @@ def handle(s, u):
                 tg("sendMessage", chat_id=chat, text=f"Поставки прочитаны, но Uzum не ответил: {type(e).__name__}"); return
             tg("sendMessage", chat_id=chat, text=f"Поставок найдено: {len(found)} из {len(nums)}" + (f" (нет: {', '.join(miss)})" if miss else "") +
                f".\nТоваров из них в наличии на Uzum: {len(items)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
+            sync_stock(s, chat)  # сразу убираем ранее опубликованные товары, которых нет в поставках
             return
         if text.startswith("/mystock"):
             body = text[len("/mystock"):].strip()
@@ -621,7 +641,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
