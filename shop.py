@@ -19,10 +19,10 @@ REGIONS = [("Каракалпакстан", 3), ("Андижан", 2), ("Бух�
 BASE_1KG = [22000, 25000, 27000, 29000, 33000]   # первый кг, по зонам 0..4
 EXTRA_KG = [3000, 6000, 7000, 8000, 9000]        # каждый следующий кг (до 20 кг)
 VAT = 1.06
-WEIGHT_KG = float(os.environ.get("DEFAULT_WEIGHT_KG") or 1)
+WEIGHT_KG = float(os.environ.get("DEFAULT_WEIGHT_KG") or 0.5)  # вес одной вещи, кг
 
 def delivery_fee(zone, kg=None):
-    kg = max(1, int(-(-(kg or WEIGHT_KG) // 1)))
+    kg = max(1, int(-(-(kg or WEIGHT_KG) // 1)))  # округляем вверх до целого кг, минимум 1
     return int(round((BASE_1KG[zone] + EXTRA_KG[zone] * (kg - 1)) * VAT))
 
 def load():
@@ -221,21 +221,37 @@ def uzum_offer(s, chat):
                 tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
 
 # ---------- покупатель: заказ ----------
+def cart_of(s, chat):
+    return s.setdefault("carts", {}).setdefault(str(chat), [])
+
 def start_order(s, chat, user, pid):
     p = s["products"].get(pid)
     if not p:
         tg("sendMessage", chat_id=chat, text="Этот товар не найден.")
         return
-    s["sessions"][str(chat)] = {"step": "name", "pid": pid, "user": user}
+    s["sessions"][str(chat)] = {"step": "note", "pid": pid, "user": user}
     tg("sendPhoto", chat_id=chat, photo=p["photos"][0], parse_mode="HTML", caption=product_caption(p))
-    tg("sendMessage", chat_id=chat, text="Оформим заказ. Как вас зовут?")
+    tg("sendMessage", chat_id=chat, text="Напишите размер, цвет и количество (или «-», если не нужно):")
 
-def order_text(o, p):
-    return (f"<b>Заказ №{o['id']}</b>: {esc(p['title'])}\n"
-            f"👤 {esc(o['name'])}\n📞 {esc(o['phone'])}\n📍 {esc(o.get('region',''))}, {esc(o['address'])}\n"
-            f"📝 {esc(o.get('comment') or '—')}\n\n"
-            f"Товар: {money(p['price'])}\nДоставка EMU Post до пункта выдачи: {money(o['fee'])}\n"
-            f"<b>Итого: {money(p['price'] + o['fee'])}</b>")
+def cart_text(s, items):
+    lines, total = [], 0
+    for n, it in enumerate(items, 1):
+        p = s["products"][it["pid"]]; total += p["price"]
+        lines.append(f"{n}. {esc(p['title'])} — {money(p['price'])}" + (f"\n    📝 {esc(it['note'])}" if it.get("note") else ""))
+    return "\n".join(lines), total
+
+def order_items(s, o):
+    return o.get("items") or [{"pid": o["pid"], "note": o.get("comment", "")}]
+
+def order_text(s, o):
+    body, total = cart_text(s, order_items(s, o))
+    return (f"<b>Заказ №{o['id']}</b>\n{body}\n\n"
+            f"👤 {esc(o['name'])}\n📞 {esc(o['phone'])}\n📍 {esc(o.get('region',''))}, {esc(o['address'])}\n\n"
+            f"Товары: {money(total)}\nДоставка EMU Post до пункта выдачи: {money(o['fee'])}\n"
+            f"<b>Итого: {money(total + o['fee'])}</b>")
+
+def items_weight(items):
+    return len(items) * WEIGHT_KG
 
 def customer_step(s, chat, msg):
     ses = s["sessions"].get(str(chat))
@@ -243,7 +259,17 @@ def customer_step(s, chat, msg):
         return False
     text = (msg.get("text") or "").strip()
     step = ses["step"]
-    if step == "name" and text:
+    if step == "note" and text:
+        items = cart_of(s, chat)
+        items.append({"pid": ses["pid"], "note": "" if text == "-" else text})
+        body, total = cart_text(s, items)
+        ses["step"] = "cart"
+        tg("sendMessage", chat_id=chat, parse_mode="HTML", text=f"🛒 Ваша корзина:\n{body}\n\nТовары: {money(total)} (доставка считается дальше)",
+           reply_markup={"inline_keyboard": [[{"text": "➕ Добавить ещё товар", "url": f"https://t.me/{CHANNEL.lstrip('@')}" if CHANNEL.startswith("@") else "https://t.me"}],
+                                             [{"text": "✅ Оформить заказ", "callback_data": "checkout:1"}],
+                                             [{"text": "🗑 Очистить корзину", "callback_data": "clear:1"}]]})
+        tg("sendMessage", chat_id=chat, text="Чтобы добавить ещё товар, откройте канал и нажмите «🛒 Заказать» на нужной карточке: корзина сохранится.")
+    elif step == "name" and text:
         ses["name"] = text; ses["step"] = "phone"
         tg("sendMessage", chat_id=chat, text="Ваш номер телефона (можно кнопкой ниже):",
            reply_markup={"keyboard": [[{"text": "📞 Отправить номер", "request_contact": True}]], "resize_keyboard": True, "one_time_keyboard": True})
@@ -254,23 +280,24 @@ def customer_step(s, chat, msg):
         rows = [[{"text": REGIONS[i][0], "callback_data": f"reg:{i}"} for i in range(j, min(j + 2, len(REGIONS)))] for j in range(0, len(REGIONS), 2)]
         tg("sendMessage", chat_id=chat, text="В какую область доставить?", reply_markup={"inline_keyboard": rows})
     elif step == "address" and text:
-        ses["address"] = text; ses["step"] = "comment"
-        tg("sendMessage", chat_id=chat, text="Размер, цвет, количество или другие пожелания (или напишите «-»):")
-    elif step == "comment" and text:
+        items = list(cart_of(s, chat))
+        if not items:
+            del s["sessions"][str(chat)]
+            tg("sendMessage", chat_id=chat, text="Корзина пуста. Выберите товар в канале.")
+            return True
         oid = str(s["next_order"]); s["next_order"] += 1
-        o = {"id": oid, "chat": chat, "pid": ses["pid"], "name": ses["name"], "phone": ses["phone"],
-             "address": ses["address"], "region": ses["region"], "fee": ses["fee"], "comment": "" if text == "-" else text, "status": "new", "user": ses.get("user")}
+        o = {"id": oid, "chat": chat, "items": items, "name": ses["name"], "phone": ses["phone"], "address": text,
+             "region": ses["region"], "fee": delivery_fee(ses["zone"], items_weight(items)), "status": "new", "user": ses.get("user")}
         s["orders"][oid] = o
+        s["carts"][str(chat)] = []
         ses["step"] = "pay"; ses["oid"] = oid
-        p = s["products"][o["pid"]]
         tg("sendMessage", chat_id=chat, parse_mode="HTML",
-           text=order_text(o, p) + f"\n\n💳 Оплата:\n{esc(PAY_INFO)}\n\nПосле оплаты нажмите кнопку и пришлите скриншот чека.",
+           text=order_text(s, o) + f"\n\n💳 Оплата:\n{esc(PAY_INFO)}\n\nПосле оплаты нажмите кнопку и пришлите скриншот чека.",
            reply_markup={"inline_keyboard": [[{"text": "✅ Я оплатил(а)", "callback_data": f"paid:{oid}"}]]})
     elif step == "receipt" and (msg.get("photo") or msg.get("document")):
         oid = ses["oid"]; o = s["orders"][oid]; o["status"] = "paid_wait"
-        p = s["products"][o["pid"]]
         tg("forwardMessage", chat_id=ADMIN, from_chat_id=chat, message_id=msg["message_id"])
-        tg("sendMessage", chat_id=ADMIN, parse_mode="HTML", text="💰 Проверьте оплату\n\n" + order_text(o, p),
+        tg("sendMessage", chat_id=ADMIN, parse_mode="HTML", text="💰 Проверьте оплату\n\n" + order_text(s, o),
            reply_markup={"inline_keyboard": [[{"text": "✅ Подтвердить", "callback_data": f"ok:{oid}"},
                                               {"text": "❌ Не пришла", "callback_data": f"no:{oid}"}]]})
         tg("sendMessage", chat_id=chat, text="Спасибо! Чек отправлен, ждём подтверждения оплаты.")
@@ -292,12 +319,23 @@ def callback(s, cq):
                 s.setdefault("uzum_done", []).append(dd["uzum_id"])
             ans = "Пропущено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
+    elif act == "checkout":
+        items = cart_of(s, chat)
+        if items:
+            ses = s["sessions"].setdefault(str(chat), {"user": None})
+            ses["step"] = "name"
+            tg("sendMessage", chat_id=chat, text="Как вас зовут?")
+    elif act == "clear":
+        s.setdefault("carts", {})[str(chat)] = []
+        s["sessions"].pop(str(chat), None)
+        tg("sendMessage", chat_id=chat, text="Корзина очищена.")
     elif act == "reg":
         ses = s["sessions"].get(str(chat))
         if ses and ses.get("step") == "region" and arg.isdigit() and int(arg) < len(REGIONS):
             name, zone = REGIONS[int(arg)]
-            ses["region"] = name; ses["fee"] = delivery_fee(zone); ses["step"] = "address"
-            tg("sendMessage", chat_id=chat, text=f"{name}. Доставка до пункта выдачи EMU Post: {money(ses['fee'])}.\nНапишите город/район и адрес или номер пункта выдачи EMU Post, куда привезти:")
+            fee = delivery_fee(zone, items_weight(cart_of(s, chat)))
+            ses["region"] = name; ses["zone"] = zone; ses["step"] = "address"
+            tg("sendMessage", chat_id=chat, text=f"{name}. Доставка до пункта выдачи EMU Post: {money(fee)}.\nНапишите город/район и адрес или номер пункта выдачи EMU Post, куда привезти:")
     elif act == "paid":
         ses = s["sessions"].get(str(chat))
         if ses and ses.get("oid") == arg:
