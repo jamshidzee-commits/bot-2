@@ -311,8 +311,10 @@ def supply_codes(numbers):
             if not lst:
                 break
             for inv in lst:
-                n = str(inv.get("invoiceNumber"))
-                if n in want:
+                full = str(inv.get("invoiceNumber"))
+                # в API номер на одну цифру длиннее, чем в кабинете: сравниваем по началу
+                n = next((w for w in want if full == w or full.startswith(w)), None)
+                if n:
                     found.add(n)
                     for pd in inv.get("productForInvoiceDto") or []:
                         collect_codes(pd, codes)
