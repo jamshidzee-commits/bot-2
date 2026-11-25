@@ -141,7 +141,8 @@ def publish(s, did):
     pid = str(s["next_product"]); s["next_product"] += 1
     s["products"][pid] = d
     export_catalog(s)
-    kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}]]}
+    kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}],
+                              [{"text": "🛍 Магазин (все товары)", "url": f"https://t.me/{me(s)}/shop"}]]}
     cap = product_caption(d)
     if len(d["photos"]) == 1:
         tg("sendPhoto", chat_id=CHANNEL, photo=d["photos"][0], caption=cap, parse_mode="HTML", reply_markup=kb)
@@ -435,12 +436,21 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/pin"):
+            r = tg("sendMessage", chat_id=CHANNEL, text="🛍 Весь ассортимент — в нашем магазине. Откройте и выбирайте:",
+                   reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]})
+            if r.get("ok"):
+                tg("pinChatMessage", chat_id=CHANNEL, message_id=r["result"]["message_id"])
+                tg("sendMessage", chat_id=chat, text="Готово: сообщение с кнопкой магазина опубликовано и закреплено в канале.")
+            else:
+                tg("sendMessage", chat_id=chat, text="Не получилось опубликовать в канале. Проверьте, что у бота есть право публикации и закрепления сообщений.")
+            return
         if text.startswith("/uzum"):
             return uzum_offer(s, chat)
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Закрепить кнопку магазина в канале: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
