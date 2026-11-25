@@ -1,12 +1,5 @@
-size=10 -> 200, получено 10
-size=50 -> 200, получено 50
-size=100 -> 400, получено 0
-страниц с данными: 3, последний код 200
-всего поставок получено: 150
-number=110004288####(13) id=428####(7) ext=None status=CREATED date=25.11.2026 products=2
-number=110004284####(13) id=428####(7) ext=None status=CREATED date=24.11.2026 products=7
-number=110004279####(13) id=427####(7) ext=None status=CREATED date=23.11.2026 products=4
-number=110003085####(13) id=308####(7) ext=None status=CANCELED date=16.01.2026 products=4
-number=110002968####(13) id=296####(7) ext=None status=CANCELED date=13.12.2025 products=19
-number=110002968####(13) id=296####(7) ext=None status=CANCELED date=13.12.2025 products=17
-фильтр invoiceNumber -> 200, 5
+каталог: товаров 220, sku 1483
+line: keys=['id', 'productTitle', 'purchasePrice', 'quantityAccepted', 'quantityToStock', 'skuForInvoiceDtoList', 'skuTitle'] id_is_sku=False id_is_product=True qtyToStock=8 nested=8
+   nested keys=id,issue,photo,purchasePrice,quantityAccepted,quantityToStock,skuTitle | skuId_match=0/8 barcode_match=0/8 id_match=8/8
+line: keys=['id', 'productTitle', 'purchasePrice', 'quantityAccepted', 'quantityToStock', 'skuForInvoiceDtoList', 'skuTitle'] id_is_sku=False id_is_product=True qtyToStock=65 nested=20
+   nested keys=id,issue,photo,purchasePrice,quantityAccepted,quantityToStock,skuTitle | skuId_match=0/20 barcode_match=0/20 id_match=20/20
