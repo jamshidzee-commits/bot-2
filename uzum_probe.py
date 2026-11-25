@@ -1,34 +1,17 @@
-"""Разведка Uzum Seller API. Пишет в uzum_probe.txt ТОЛЬКО имена полей и типы (никаких значений, ключа и текстов ответа)."""
-import os, json, requests
+"""Разведка форматов фото: пишет в uzum_probe.txt только МАСКИРОВАННЫЕ шаблоны ссылок на публичные фото (без значений и ключа)."""
+import os, re, requests
 KEY = os.environ["UZUM_API_KEY"].strip()
 BASE = "https://api-seller.uzum.uz/api/seller-openapi"
+H = {"Authorization": KEY}
+mask = lambda v: re.sub(r"[0-9a-zA-Z]{12,}", "X", str(v))[:200] if v else repr(v)
 out = []
-def shape(x, d=0):
-    if isinstance(x, dict):
-        return {k: (shape(v, d + 1) if d < 4 else type(v).__name__) for k, v in x.items()}
-    if isinstance(x, list):
-        return [shape(x[0], d + 1)] if x else []
-    return type(x).__name__
-def get(path, **p):
-    for name, hdr in (("raw", {"Authorization": KEY}), ("bearer", {"Authorization": "Bearer " + KEY})):
-        try:
-            r = requests.get(BASE + path, headers=hdr, params=p, timeout=30)
-        except Exception as e:
-            out.append(f"{path} {name} ERR {type(e).__name__}"); return None
-        out.append(f"{path} {name} -> {r.status_code}")
-        if r.status_code == 200:
-            try:
-                j = r.json()
-            except Exception:
-                out.append("not json"); return None
-            out.append(json.dumps(shape(j), ensure_ascii=False)[:3000]); return j
-    return None
-shops = get("/v1/shops")
-ids = []
-if shops:
-    lst = shops.get("payload", shops) if isinstance(shops, dict) else shops
-    ids = [s.get("id") for s in lst if isinstance(s, dict)]
-out.append(f"shops: {len(ids)}")
-for sid in ids[:1]:
-    get(f"/v1/product/shop/{sid}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=2, page=0)
+for sh in requests.get(BASE + "/v1/shops", headers=H, timeout=30).json():
+    r = requests.get(f"{BASE}/v1/product/shop/{sh['id']}", headers=H, params=dict(searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=2, page=0), timeout=30)
+    if r.status_code != 200:
+        continue
+    for p in r.json().get("productList", [])[:2]:
+        out.append("image=" + mask(p.get("image")) + " | previewImg=" + mask(p.get("previewImg")))
+        k = (p.get("skuList") or [{}])[0]
+        out.append("sku.previewImage=" + mask(k.get("previewImage")) + " | photo=" + mask(k.get("photo")))
+        out.append("product keys: " + ",".join(sorted(p.keys())))
 open("uzum_probe.txt", "w", encoding="utf-8").write("\n".join(out))
