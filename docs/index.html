@@ -50,7 +50,7 @@ const BOT="Online_magazin12jam_bot";
 let P=[],cart=[];try{cart=JSON.parse(localStorage.getItem("cart")||"[]")}catch(e){}
 const fmt=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g," ")+" сум";
 const save=()=>{try{localStorage.setItem("cart",JSON.stringify(cart))}catch(e){}};
-fetch("products.json?"+Date.now()).then(r=>r.json()).then(d=>{P=d.products||[];BOTU=d.bot||BOT;render();bar();});
+fetch("products.json?"+Date.now()).then(r=>r.json()).then(d=>{P=d.products||[];BOTU=d.bot||BOT;cart=cart.filter(c=>P.some(p=>p.id===c.id));save();render();bar();});
 let BOTU=BOT;
 function render(){
   const q=document.getElementById("q").value.toLowerCase();
