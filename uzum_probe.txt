@@ -1,6 +1,9 @@
-image=https://images.uzum.uz/X/t_product_540_high.jpg | previewImg=https://images.uzum.uz/X/t_product_80_low.jpg
-sku.previewImage=https://images.uzum.uz/X | photo=None
-product keys: allFiltersFilled,auctionMember,blockComment,blockReason,blockingReasons,category,clicks,commission,commissionDto,conversion,cpoAdvertisementsDetails,createdByFlowB,dateModerated,feedbackQuantity,image,isActive,isDeletable,isEditable,isEditableSku,isIlliquid,isWithoutWeightDimensional,moderationStatus,newYearStatus,previewImg,price,productId,promotionStatus,pstorage,quantityActive,quantityAdditional,quantityArchived,quantityAvailable,quantityAvailableByStockType,quantityCreated,quantityDefected,quantityFbs,quantityMissing,quantityOnPhotoStudio,quantityPending,quantityReserved,quantityReturned,quantitySold,rankInfo,rating,returnedPercentage,roi,skuList,skuTitle,skusHasAllRequiredFilters,status,switchbackActive,title,viewers,volumeDiscount
-image=https://images.uzum.uz/X/t_product_540_high.jpg | previewImg=https://images.uzum.uz/X/t_product_80_low.jpg
-sku.previewImage=https://images.uzum.uz/X | photo=None
-product keys: allFiltersFilled,auctionMember,blockComment,blockReason,blockingReasons,category,clicks,commission,commissionDto,conversion,cpoAdvertisementsDetails,createdByFlowB,dateModerated,feedbackQuantity,image,isActive,isDeletable,isEditable,isEditableSku,isIlliquid,isWithoutWeightDimensional,moderationStatus,newYearStatus,previewImg,price,productId,promotionStatus,pstorage,quantityActive,quantityAdditional,quantityArchived,quantityAvailable,quantityAvailableByStockType,quantityCreated,quantityDefected,quantityFbs,quantityMissing,quantityOnPhotoStudio,quantityPending,quantityReserved,quantityReturned,quantitySold,rankInfo,rating,returnedPercentage,roi,skuList,skuTitle,skusHasAllRequiredFilters,status,switchbackActive,title,viewers,volumeDiscount
+product: skus=6 distinct sku images=2
+product: skus=10 distinct sku images=2
+product: skus=20 distinct sku images=5
+product: skus=2 distinct sku images=2
+product: skus=2 distinct sku images=1
+/v1/product/ID -> 403
+/v2/product/ID -> 403
+/v1/product/shop/SHOP/ID -> 404
+sku photo/characteristicsList keys: {'photo': 'NoneType', 'cl': [{'characteristicTitle': 'dict', 'definedType': 'bool', 'characteristicValue': 'dict'}]}
