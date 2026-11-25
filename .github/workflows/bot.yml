@@ -47,11 +47,21 @@ jobs:
               sleep $((i*3))
             done
           }
-          RUN_SECONDS=3300 python shop.py &
+          end=$((SECONDS + 3300))
+          h=$(sha1sum shop.py | cut -d' ' -f1)
+          RUN_SECONDS=$((end - SECONDS)) python shop.py &
           pid=$!
           while kill -0 $pid 2>/dev/null; do
             sleep 60
             save || echo "save xato"
+            nh=$(sha1sum shop.py | cut -d' ' -f1)
+            if [ "$nh" != "$h" ] && [ $((end - SECONDS)) -gt 120 ]; then
+              echo "shop.py yangilandi — qayta ishga tushirish"
+              kill $pid 2>/dev/null; wait $pid 2>/dev/null
+              h=$nh
+              RUN_SECONDS=$((end - SECONDS)) python shop.py &
+              pid=$!
+            fi
           done
           save || true
       - name: Keyingi ishga tushirish

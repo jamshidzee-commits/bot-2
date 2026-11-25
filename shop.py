@@ -137,7 +137,7 @@ def uzum_products():
     for sh in uzum_get("/v1/shops"):
         page = 0
         while page < 40:
-            j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=50, page=page)
+            j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
             lst = j.get("productList") or []
             for pr in lst:
                 skus = [k for k in pr.get("skuList", []) if (k.get("quantityAvailable") or 0) > 0 and not k.get("archived") and not k.get("blocked")]
@@ -153,7 +153,7 @@ def uzum_products():
                 if price and img:
                     out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
                                 "photo": img, "opts": opts[:12]})
-            if len(lst) < 50:
+            if len(lst) < 20:
                 break
             page += 1
     return out
@@ -165,7 +165,9 @@ def uzum_offer(s, chat):
     try:
         items = uzum_products()
     except Exception as e:
-        tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum API: {type(e).__name__}")
+        code = getattr(getattr(e, "response", None), "status_code", "")
+        tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum API: {type(e).__name__} {code}")
+        print("UZUM ERR", repr(e)[:300])
         return
     done = set(s.setdefault("uzum_done", []))
     new = [i for i in items if i["id"] not in done]
