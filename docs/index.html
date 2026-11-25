@@ -25,6 +25,7 @@ button{font:inherit;border:0;cursor:pointer}
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:10}
 .sheet .in{background:#fff;border-radius:18px 18px 0 0;width:100%;max-height:90vh;overflow:auto;padding:14px}
 .sheet img{width:100%;max-height:48vh;object-fit:contain;border-radius:12px;background:#f1f1f4}
+.gal{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory}.gal img{width:88%;flex:none;scroll-snap-align:center}
 .opts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .opt{border:1px solid #d6d6de;background:#fff;border-radius:10px;padding:8px 12px}
 .opt.on{border-color:var(--accent);background:#ece3fb;color:var(--accent);font-weight:700}
@@ -65,7 +66,8 @@ let cur=null,opt=0;
 function openP(id){
   cur=P.find(p=>p.id===id);opt=0;const p=cur;
   const opts=p.opts&&p.opts.length?`<div class="note">Вариант:</div><div class="opts" id="opts">${p.opts.map((o,i)=>`<button class="opt ${i===0?"on":""}" onclick="pick(${i})">${esc(o)}</button>`).join("")}</div>`:"";
-  show(`<img src="${p.photo}" alt=""><h3 style="margin:10px 0 4px">${esc(p.title)}</h3>
+  const ph=(p.photos&&p.photos.length?p.photos:[p.photo]);
+  show(`<div class="gal">${ph.map(u=>`<img src="${u}" alt="">`).join("")}</div>${ph.length>1?`<div class="note" style="text-align:center">‹ листайте фото › ${ph.length} шт</div>`:""}<h3 style="margin:10px 0 4px">${esc(p.title)}</h3>
   <div><span class="price">${fmt(p.price)}</span>${p.old>p.price?`<span class="old">${fmt(p.old)}</span>`:""}</div>
   ${p.desc&&!p.desc.startsWith("Варианты")?`<p>${esc(p.desc)}</p>`:""}${opts}
   <div class="note">🚚 Доставка EMU Post считается при оформлении</div>

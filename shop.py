@@ -80,7 +80,7 @@ def export_catalog(s):
         ph = (p.get("photos") or [""])[0]
         if p.get("hidden") or not ph.startswith("http"):
             continue
-        items.append({"id": pid, "title": p["title"], "price": p["price"], "old": p.get("uzum", 0), "photo": ph,
+        items.append({"id": pid, "title": p["title"], "price": p["price"], "old": p.get("uzum", 0), "photo": ph, "photos": [u for u in p.get("photos", []) if u.startswith("http")],
                       "opts": p.get("opts", []), "desc": p.get("desc", "")})
     os.makedirs("docs", exist_ok=True)
     data = json.dumps({"bot": me(s), "products": items[::-1]}, ensure_ascii=False)
@@ -198,9 +198,13 @@ def uzum_products():
                     if c and c not in opts:
                         opts.append(c)
                 img = uzum_img(pr.get("image") or pr.get("previewImg") or (skus[0].get("previewImage")))
+                photos, seen = [], set()
+                for u in [img] + [uzum_img(k.get("previewImage")) for k in pr.get("skuList", [])]:
+                    if u and u.split("/")[3:4] and u.split("/")[3] not in seen:
+                        seen.add(u.split("/")[3]); photos.append(u)
                 if price and img:
                     out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
-                                "photo": img, "opts": opts[:12]})
+                                "photo": img, "photos": photos[:10], "opts": opts[:12]})
             if len(lst) < 20:
                 break
             page += 1
@@ -220,25 +224,29 @@ def uzum_offer(s, chat):
     done = set(s.setdefault("uzum_done", []))
     new = [i for i in items if i["id"] not in done]
     tg("sendMessage", chat_id=chat, text=f"Товаров в наличии на Uzum: {len(items)}, ещё не в канале: {len(new)}. Показываю до 10.")
-    for i in new[:10]:
-        i["photo"] = best_img(i["photo"])
-        d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": [i["photo"]],
+    from concurrent.futures import ThreadPoolExecutor
+    batch = new[:10]
+    with ThreadPoolExecutor(8) as ex:
+        for i in batch:
+            i["photos"] = list(ex.map(best_img, i.get("photos") or [i["photo"]]))
+    for i in batch:
+        d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": i["photos"],
              "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"], "opts": i["opts"]}
         did = f"u{i['id']}"
         s["drafts"][did] = d
-        r = tg("sendPhoto", chat_id=chat, photo=i["photo"], parse_mode="HTML",
-               caption=product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])})",
-               reply_markup={"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
-                                                  {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]})
-        if not r.get("ok"):
-            try:  # запасной путь: скачиваем фото и загружаем сами
-                img = requests.get(i["photo"], timeout=40).content
-                requests.post(TG + "sendPhoto", data={"chat_id": chat, "parse_mode": "HTML",
-                    "caption": product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])})",
-                    "reply_markup": json.dumps({"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
-                                                                    {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]})},
-                    files={"photo": ("p.jpg", img)}, timeout=60)
-            except Exception as e:
+        cap = product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])}, фото: {len(d['photos'])})"
+        kb = {"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
+                                   {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]}
+        ok = False
+        if len(d["photos"]) > 1:
+            media = [{"type": "photo", "media": u} for u in d["photos"]]
+            media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
+            ok = tg("sendMediaGroup", chat_id=chat, media=media).get("ok")
+            if ok:
+                tg("sendMessage", chat_id=chat, text=f"👆 {i['title'][:60]}", reply_markup=kb)
+        if not ok:
+            r = tg("sendPhoto", chat_id=chat, photo=d["photos"][0], parse_mode="HTML", caption=cap, reply_markup=kb)
+            if not r.get("ok"):
                 tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
 
 # ---------- покупатель: заказ ----------
