@@ -1,21 +1,12 @@
-/v1/invoice ['page', 'size'] -> 200
-   [{'id': 'int', 'shopId': 'int', 'shopTitle': 'str', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'productForInvoiceDto': [{'id': 'int', 'skuTitle': 'str', 'productTitle': 'str', 'quantityToStock': 'int', 'quantityAccepted': 'int', 'purchasePrice': 'int', 'skuForInvoiceDtoList': 'list'}], 'ettnDto': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}}]
-/v1/fbo/invoice ['page', 'size'] -> 403
-/v2/fbo/invoice ['page', 'size'] -> 403
-/v1/supply ['page', 'size'] -> 403
-/v1/fbo/supply ['page', 'size'] -> 403
-/v1/invoices ['page', 'size'] -> 403
-/v1/invoice ['page', 'size', 'shopId'] -> 200
-   [{'id': 'int', 'shopId': 'int', 'shopTitle': 'str', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'productForInvoiceDto': [{'id': 'int', 'skuTitle': 'str', 'productTitle': 'str', 'quantityToStock': 'int', 'quantityAccepted': 'int', 'purchasePrice': 'int', 'skuForInvoiceDtoList': 'list'}], 'ettnDto': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}}]
-/v1/fbo/invoice ['page', 'size', 'shopId'] -> 403
-/v2/fbo/invoice ['page', 'size', 'shopId'] -> 403
-/v1/shop/90091/invoice ['page', 'size', 'shopId'] -> 200
-   [{'id': 'int', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'status': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'hasIssue': 'bool', 'externalNumber': 'NoneType', 'invoiceEttn': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}, 'fines': [], 'createdInvoiceCount': 'int'}]
-/v1/invoice/products ['invoiceId', 'page', 'size'] -> 404
-/v1/fbo/invoice/products ['invoiceId', 'page', 'size'] -> 403
-/v1/invoice/110004288155 ['invoiceId', 'page', 'size'] -> 404
-/v1/fbo/invoice/110004288155 ['invoiceId', 'page', 'size'] -> 403
-/v1/invoice/products ['invoiceId', 'page', 'size'] -> 404
-/v1/fbo/invoice/products ['invoiceId', 'page', 'size'] -> 403
-/v1/invoice/110004284738 ['invoiceId', 'page', 'size'] -> 404
-/v1/fbo/invoice/110004284738 ['invoiceId', 'page', 'size'] -> 403
+size=10 -> 200, получено 10
+size=50 -> 200, получено 50
+size=100 -> 400, получено 0
+страниц с данными: 3, последний код 200
+всего поставок получено: 150
+number=110004288####(13) id=428####(7) ext=None status=CREATED date=25.11.2026 products=2
+number=110004284####(13) id=428####(7) ext=None status=CREATED date=24.11.2026 products=7
+number=110004279####(13) id=427####(7) ext=None status=CREATED date=23.11.2026 products=4
+number=110003085####(13) id=308####(7) ext=None status=CANCELED date=16.01.2026 products=4
+number=110002968####(13) id=296####(7) ext=None status=CANCELED date=13.12.2025 products=19
+number=110002968####(13) id=296####(7) ext=None status=CANCELED date=13.12.2025 products=17
+фильтр invoiceNumber -> 200, 5
