@@ -288,7 +288,7 @@ def uzum_offer(s, chat):
         return
     done = set(s.setdefault("uzum_done", []))
     new = [i for i in items if i["id"] not in done]
-    tg("sendMessage", chat_id=chat, text=f"Товаров в наличии на Uzum: {len(items)}, ещё не в канале: {len(new)}. Показываю до 10.")
+    tg("sendMessage", chat_id=chat, text=(f"Товаров в ваших поставках: {len(items)}" if s.get("mystock") else f"Товаров в наличии на Uzum: {len(items)}") + f", ещё не в канале: {len(new)}. Показываю до 10.")
     from concurrent.futures import ThreadPoolExecutor
     batch = new[:10]
     with ThreadPoolExecutor(8) as ex:
