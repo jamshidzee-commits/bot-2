@@ -213,7 +213,7 @@ def uzum_img(x):
 def best_img(url):
     """Берём самое крупное фото, которое реально отдаётся."""
     base = url.rsplit("/", 1)[0]
-    for name in ("original.jpg", "t_product_1080_high.jpg", "t_product_540_high.jpg"):
+    for name in ("t_product_1080_high.jpg", "t_product_540_high.jpg"):  # original.jpg бывает слишком тяжёлым для Telegram
         try:
             if requests.head(f"{base}/{name}", timeout=15, allow_redirects=True).status_code == 200:
                 return f"{base}/{name}"
@@ -303,112 +303,32 @@ def uzum_offer(s, chat):
         kb = {"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
                                    {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]}
         ok = False
-        if len(d["photos"]) > 1:
-            media = [{"type": "photo", "media": u} for u in d["photos"]]
-            media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
-            ok = tg("sendMediaGroup", chat_id=chat, media=media).get("ok")
-            if ok:
-                tg("sendMessage", chat_id=chat, text=f"👆 {i['title'][:60]}", reply_markup=kb)
-        if not ok:
-            r = tg("sendPhoto", chat_id=chat, photo=d["photos"][0], parse_mode="HTML", caption=cap, reply_markup=kb)
-            if not r.get("ok"):
-                tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
-
-def remove_product(s, pid):
-    p = s["products"].get(pid)
-    if not p:
-        return False
-    for m in p.get("msgs", []):
-        tg("deleteMessage", chat_id=CHANNEL, message_id=m)
-    p["msgs"] = []; p["hidden"] = True
-    export_catalog(s)
-    return True
-
-def collect_codes(x, out):
-    """Собирает ID/штрихкоды/артикулы из строки поставки Uzum (структура может меняться)."""
-    if isinstance(x, dict):
-        for k, v in x.items():
-            if isinstance(v, (dict, list)):
-                collect_codes(v, out)
-            elif v not in (None, "") and k in ("id", "skuId", "productId", "barcode", "sellerItemCode", "article"):
-                out.add(str(v).strip())
-    elif isinstance(x, list):
-        for v in x:
-            collect_codes(v, out)
-
-def supply_codes(numbers):
-    """Коды SKU и количества из поставок Uzum. Возвращает (коды, найденные номера, подсказка, {sku: штук}, {номер: штук})."""
-    want = set(numbers); found, qty, per, hint, seen = set(), {}, {}, "", set()
-    for shop in uzum_get("/v1/shops"):
-        for page in range(0, 30):
+        small = [u.rsplit("/", 1)[0] + "/t_product_540_high.jpg" if "images.uzum.uz" in u else u for u in d["photos"]]
+        for urls in (d["photos"], small):
+            if len(urls) > 1:
+                media = [{"type": "photo", "media": u} for u in urls]
+                media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
+                ok = tg("sendMediaGroup", chat_id=chat, media=media).get("ok")
+                if ok:
+                    d["photos"] = urls
+                    tg("sendMessage", chat_id=chat, text=f"👆 {i['title'][:60]}", reply_markup=kb)
+                    break
+            else:
+                ok = tg("sendPhoto", chat_id=chat, photo=urls[0], parse_mode="HTML", caption=cap, reply_markup=kb).get("ok")
+                if ok:
+                    d["photos"] = urls
+                    break
+        if not ok:  # последний шанс: скачиваем первое фото и загружаем сами
             try:
-                lst = uzum_get("/v1/invoice", page=page, size=50, shopId=shop["id"])
-            except requests.HTTPError:
-                break
-            if not lst:
-                break
-            for inv in lst:
-                full = str(inv.get("invoiceNumber"))
-                # в API номер на одну цифру длиннее, чем в кабинете: сравниваем по началу
-                n = next((w for w in want if full == w or full.startswith(w)), None)
-                if n and full not in seen:
-                    seen.add(full); found.add(n)
-                    for pd in inv.get("productForInvoiceDto") or []:
-                        # строка поставки: id = товар, во вложенном списке id = SKU (размер/цвет) и их количество
-                        for sk in pd.get("skuForInvoiceDtoList") or []:
-                            q = sk.get("quantityToStock") or 0
-                            if q > 0 and sk.get("id") is not None:
-                                qty[str(sk["id"])] = qty.get(str(sk["id"]), 0) + q
-                                per[n] = per.get(n, 0) + q
-                        if not hint and pd.get("skuForInvoiceDtoList"):
-                            hint = ",".join(sorted(pd["skuForInvoiceDtoList"][0].keys()))
-            if found >= want and all(w in per or True for w in want):
-                break
-        if found >= want:
-            break
-    return set(qty), found, hint, qty, per
-
-def product_kb(s, pid):
-    return {"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]}
-
-def sync_stock(s, chat=None):
-    """Убирает товары Uzum без остатка и обновляет список размеров/вариантов по наличию."""
-    if not UZUM_KEY:
-        return
-    try:
-        have = {i["id"]: i for i in uzum_products(s.get("mystock"), s.get("mystock_instock", False))}
-    except Exception as e:
-        print("sync", repr(e)[:200]); return
-    if UZUM_ERRORS:
-        print("sync: ошибки Uzum, пропускаю"); return
-    gone, changed = [], []
-    for pid, p in list(s["products"].items()):
-        uid = p.get("uzum_id")
-        if not uid or p.get("hidden"):
-            continue
-        if uid not in have:
-            gone.append(pid); continue
-        opts = have[uid]["opts"]
-        if opts != p.get("opts", []):
-            p["opts"] = opts
-            p["desc"] = ("Варианты: " + "; ".join(opts)) if opts else ""
-            changed.append(p["title"])
-            if p.get("msgs"):
-                kb = product_kb(s, pid) if len(p.get("photos", [])) <= 1 else None
-                data = dict(chat_id=CHANNEL, message_id=p["msgs"][0], caption=product_caption(p), parse_mode="HTML")
-                if kb:
-                    data["reply_markup"] = kb
-                tg("editMessageCaption", **data)
-    names = [s["products"][pid]["title"] for pid in gone if remove_product(s, pid)]
-    if changed:
-        export_catalog(s)
-    if chat is not None or names or changed:
-        txt = []
-        if names:
-            txt.append("Убраны (нет в наличии):\n• " + "\n• ".join(names))
-        if changed:
-            txt.append("Обновлены размеры/варианты:\n• " + "\n• ".join(changed))
-        tg("sendMessage", chat_id=chat or ADMIN, text="\n\n".join(txt) or "Всё в наличии, изменений нет.")
+                img = requests.get(small[0], timeout=40).content
+                ok = requests.post(TG + "sendPhoto", data={"chat_id": chat, "parse_mode": "HTML", "caption": cap, "reply_markup": json.dumps(kb)},
+                                   files={"photo": ("p.jpg", img)}, timeout=60).ok
+                if ok:
+                    d["photos"] = small[:1]
+            except Exception as e:
+                print("photo fallback", type(e).__name__)
+        if not ok:
+            tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
 
 # ---------- покупатель: заказ ----------
 def cart_of(s, chat):
