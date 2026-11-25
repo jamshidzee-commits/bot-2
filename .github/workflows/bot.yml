@@ -1,0 +1,65 @@
+name: Online shop bot
+
+# Работает по кругу: один запуск ~55 минут, в конце запускает следующий. Расписание раз в час — запасной вариант.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: shop-bot
+  cancel-in-progress: false
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Bot ishlayapti
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+          PAY_INFO: ${{ secrets.PAY_INFO }}
+          DELIVERY_FEE: ${{ vars.DELIVERY_FEE }}
+          DISCOUNT_PERCENT: ${{ vars.DISCOUNT_PERCENT }}
+        run: |
+          git config user.name "shop-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git fetch -q origin main && git reset -q --hard origin/main
+          save() {
+            touch state.json
+            git add state.json
+            git diff --cached --quiet && return 0
+            git commit -q -m "update state"
+            for i in 1 2 3 4 5; do
+              git pull -q --rebase --autostash -X theirs && git push -q && return 0
+              sleep $((i*3))
+            done
+          }
+          RUN_SECONDS=3300 python shop.py &
+          pid=$!
+          while kill -0 $pid 2>/dev/null; do
+            sleep 60
+            save || echo "save xato"
+          done
+          save || true
+      - name: Keyingi ishga tushirish
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          waiting=$(gh run list -R "$GITHUB_REPOSITORY" -w bot.yml -L 20 --json status \
+            -q '[.[] | select(.status=="queued" or .status=="pending" or .status=="waiting" or .status=="requested")] | length')
+          if [ "$waiting" = "0" ]; then
+            gh workflow run bot.yml -R "$GITHUB_REPOSITORY" --ref main
+          fi
