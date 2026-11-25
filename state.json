@@ -1,1 +1,1 @@
-{"offset": 8139975, "products": {}, "orders": {}, "sessions": {}, "drafts": {}, "albums": {}, "next_product": 1, "next_order": 1}
+{"offset": 8139978, "products": {"1": {"title": "Тест", "uzum": 100000, "desc": "проверка", "price": 80000, "photos": ["AgACAgIAAxkBAAMIawa60-pmYZQvcxJeWNEQmUMvGtUAAn4daxtenjFIJ6p1mFPUGKABAAMCAAN5AAM9BA"]}}, "orders": {}, "sessions": {"339489226": {"step": "name", "pid": "1", "user": "jamzee"}}, "drafts": {}, "albums": {}, "next_product": 2, "next_order": 1, "me": "Online_magazin12jam_bot"}
