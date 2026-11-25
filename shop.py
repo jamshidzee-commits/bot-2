@@ -354,7 +354,10 @@ def supply_codes(numbers):
                 if n:
                     found.add(n)
                     for pd in inv.get("productForInvoiceDto") or []:
-                        collect_codes(pd, codes)
+                        # строка поставки: id = товар, во вложенном списке id = SKU (размер/цвет) и их количество
+                        for sk in pd.get("skuForInvoiceDtoList") or []:
+                            if (sk.get("quantityToStock") or 0) > 0 and sk.get("id") is not None:
+                                codes.add(str(sk["id"]))
                         if not hint and pd.get("skuForInvoiceDtoList"):
                             hint = ",".join(sorted(pd["skuForInvoiceDtoList"][0].keys()))
             if found >= want:
@@ -633,13 +636,13 @@ def handle(s, u):
             if not codes:
                 tg("sendMessage", chat_id=chat, text=f"Поставки не найдены или пустые. Не найдены: {', '.join(miss) or '—'}. Поля: {hint}")
                 return
-            s["mystock"] = sorted(codes); s["mystock_instock"] = True
+            s["mystock"] = sorted(codes); s["mystock_instock"] = False  # остаток на складе Uzum не важен: твоя наличие = то, что в поставках
             try:
-                items = uzum_products(s["mystock"], True)
+                items = uzum_products(s["mystock"], False)
             except Exception as e:
                 tg("sendMessage", chat_id=chat, text=f"Поставки прочитаны, но Uzum не ответил: {type(e).__name__}"); return
             tg("sendMessage", chat_id=chat, text=f"Поставок найдено: {len(found)} из {len(nums)}" + (f" (нет: {', '.join(miss)})" if miss else "") +
-               f".\nТоваров из них в наличии на Uzum: {len(items)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
+               f".\nТоваров в этих поставках: {len(items)}, размеров/вариантов: {len(codes)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
             sync_stock(s, chat)  # сразу убираем ранее опубликованные товары, которых нет в поставках
             return
         if text.startswith("/mystock"):
