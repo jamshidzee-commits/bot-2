@@ -1,26 +1,35 @@
-"""Разведка поставок: сколько их, как выглядят номера (последние 4 цифры скрыты), статусы."""
+"""Разведка поставки: из каких полей брать размеры (SKU). Пишем только имена полей и счётчики совпадений."""
 import os, requests
 KEY = os.environ["UZUM_API_KEY"].strip()
 BASE = "https://api-seller.uzum.uz/api/seller-openapi"
 H = {"Authorization": KEY}
 out = []
-m = lambda v: (str(v)[:-4] + "####" + f"({len(str(v))})") if v not in (None, "") else "None"
-def lst(page, size, **p):
-    r = requests.get(BASE + "/v1/invoice", headers=H, params=dict(page=page, size=size, **p), timeout=30)
-    return r.status_code, (r.json() if r.status_code == 200 else [])
-for size in (10, 50, 100):
-    code, j = lst(0, size)
-    out.append(f"size={size} -> {code}, получено {len(j)}")
-total, seen = 0, []
-for page in range(0, 40):
-    code, j = lst(page, 50)
-    if code != 200 or not j:
-        out.append(f"страниц с данными: {page}, последний код {code}"); break
-    total += len(j); seen += j
-out.append(f"всего поставок получено: {total}")
-for inv in seen[:3] + seen[-3:]:
-    out.append(f"number={m(inv.get('invoiceNumber'))} id={m(inv.get('id'))} ext={m(inv.get('externalNumber'))} status={(inv.get('invoiceStatus') or {}).get('value')} date={str(inv.get('dateCreated'))[:10]} products={len(inv.get('productForInvoiceDto') or [])}")
-# фильтр по номеру
-code, j = lst(0, 5, invoiceNumber=110004288155)
-out.append(f"фильтр invoiceNumber -> {code}, {len(j)}")
+get = lambda path, **p: requests.get(BASE + path, headers=H, params=p, timeout=30)
+sku_ids, prod_ids, barcodes = set(), set(), set()
+for sh in get("/v1/shops").json():
+    for page in range(30):
+        r = get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
+        if r.status_code != 200:
+            break
+        lst = r.json().get("productList", [])
+        for pr in lst:
+            prod_ids.add(str(pr["productId"]))
+            for k in pr.get("skuList", []):
+                sku_ids.add(str(k.get("skuId"))); barcodes.add(str(k.get("barcode")))
+        if len(lst) < 20:
+            break
+    break
+out.append(f"каталог: товаров {len(prod_ids)}, sku {len(sku_ids)}")
+inv_all = []
+for page in range(3):
+    inv_all += get("/v1/invoice", page=page, size=50).json()
+for inv in inv_all:
+    if str(inv.get("invoiceNumber")).startswith(("110004288155", "110004284738", "110004279766")):
+        for pd in inv.get("productForInvoiceDto") or []:
+            sk = pd.get("skuForInvoiceDtoList") or []
+            out.append(f"line: keys={sorted(pd.keys())} id_is_sku={str(pd.get('id')) in sku_ids} id_is_product={str(pd.get('id')) in prod_ids} qtyToStock={pd.get('quantityToStock')} nested={len(sk)}")
+            if sk:
+                e = sk[0]
+                out.append("   nested keys=" + ",".join(sorted(e.keys())) + f" | skuId_match={sum(str(x.get('skuId')) in sku_ids for x in sk)}/{len(sk)} barcode_match={sum(str(x.get('barcode')) in barcodes for x in sk)}/{len(sk)} id_match={sum(str(x.get('id')) in sku_ids for x in sk)}/{len(sk)}")
+        break
 open("uzum_probe.txt", "w", encoding="utf-8").write("\n".join(out))
