@@ -274,20 +274,48 @@ def remove_product(s, pid):
     export_catalog(s)
     return True
 
+def product_kb(s, pid):
+    return {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}],
+                                [{"text": "🛍 Магазин (все товары)", "url": f"https://t.me/{me(s)}/shop"}]]}
+
 def sync_stock(s, chat=None):
-    """Убирает из канала и приложения товары Uzum, которых нет в наличии."""
+    """Убирает товары Uzum без остатка и обновляет список размеров/вариантов по наличию."""
     if not UZUM_KEY:
         return
     try:
-        have = {i["id"] for i in uzum_products()}
+        have = {i["id"]: i for i in uzum_products()}
     except Exception as e:
         print("sync", repr(e)[:200]); return
     if UZUM_ERRORS:
         print("sync: ошибки Uzum, пропускаю"); return
-    gone = [pid for pid, p in s["products"].items() if p.get("uzum_id") and not p.get("hidden") and p["uzum_id"] not in have]
+    gone, changed = [], []
+    for pid, p in list(s["products"].items()):
+        uid = p.get("uzum_id")
+        if not uid or p.get("hidden"):
+            continue
+        if uid not in have:
+            gone.append(pid); continue
+        opts = have[uid]["opts"]
+        if opts != p.get("opts", []):
+            p["opts"] = opts
+            p["desc"] = ("Варианты: " + "; ".join(opts)) if opts else ""
+            changed.append(p["title"])
+            if p.get("msgs"):
+                kb = product_kb(s, pid) if len(p.get("photos", [])) <= 1 else None
+                data = dict(chat_id=CHANNEL, message_id=p["msgs"][0], caption=product_caption(p), parse_mode="HTML")
+                if kb:
+                    data["reply_markup"] = kb
+                tg("editMessageCaption", **data)
     names = [s["products"][pid]["title"] for pid in gone if remove_product(s, pid)]
-    if chat is not None or names:
-        tg("sendMessage", chat_id=chat or ADMIN, text=("Убраны из канала и приложения (нет в наличии):\n• " + "\n• ".join(names)) if names else "Все опубликованные товары в наличии.")
+    if changed:
+        export_catalog(s)
+    if chat is not None or names or changed:
+        txt = []
+        if names:
+            txt.append("Убраны (нет в наличии):\n• " + "\n• ".join(names))
+        if changed:
+            txt.append("Обновлены размеры/варианты:\n• " + "\n• ".join(changed))
+        tg("sendMessage", chat_id=chat or ADMIN, text="\n\n".join(txt) or "Всё в наличии, изменений нет.")
 
 # ---------- покупатель: заказ ----------
 def cart_of(s, chat):
