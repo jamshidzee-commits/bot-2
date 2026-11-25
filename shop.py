@@ -131,6 +131,17 @@ def uzum_img(x):
         return None
     return x if x.startswith("http") else f"https://images.uzum.uz/{x}/original.jpg"
 
+def best_img(url):
+    """Берём самое крупное фото, которое реально отдаётся."""
+    base = url.rsplit("/", 1)[0]
+    for name in ("original.jpg", "t_product_1080_high.jpg", "t_product_540_high.jpg"):
+        try:
+            if requests.head(f"{base}/{name}", timeout=15, allow_redirects=True).status_code == 200:
+                return f"{base}/{name}"
+        except Exception:
+            pass
+    return url
+
 def uzum_products():
     """Все товары всех магазинов продавца, в наличии."""
     out = []
@@ -153,7 +164,7 @@ def uzum_products():
                     c = (k.get("characteristics") or k.get("skuTitle") or "").strip()
                     if c and c not in opts:
                         opts.append(c)
-                img = uzum_img(pr.get("previewImg") or pr.get("image") or (skus[0].get("previewImage")))
+                img = uzum_img(pr.get("image") or pr.get("previewImg") or (skus[0].get("previewImage")))
                 if price and img:
                     out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
                                 "photo": img, "opts": opts[:12]})
@@ -177,6 +188,7 @@ def uzum_offer(s, chat):
     new = [i for i in items if i["id"] not in done]
     tg("sendMessage", chat_id=chat, text=f"Товаров в наличии на Uzum: {len(items)}, ещё не в канале: {len(new)}. Показываю до 10.")
     for i in new[:10]:
+        i["photo"] = best_img(i["photo"])
         d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": [i["photo"]],
              "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"]}
         did = f"u{i['id']}"
@@ -186,7 +198,15 @@ def uzum_offer(s, chat):
                reply_markup={"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
                                                   {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]})
         if not r.get("ok"):
-            tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
+            try:  # запасной путь: скачиваем фото и загружаем сами
+                img = requests.get(i["photo"], timeout=40).content
+                requests.post(TG + "sendPhoto", data={"chat_id": chat, "parse_mode": "HTML",
+                    "caption": product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])})",
+                    "reply_markup": json.dumps({"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
+                                                                    {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]})},
+                    files={"photo": ("p.jpg", img)}, timeout=60)
+            except Exception as e:
+                tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
 
 # ---------- покупатель: заказ ----------
 def start_order(s, chat, user, pid):
