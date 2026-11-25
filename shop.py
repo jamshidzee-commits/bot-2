@@ -358,8 +358,7 @@ def supply_codes(numbers):
     return codes, found, hint
 
 def product_kb(s, pid):
-    return {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}],
-                                [{"text": "🛍 Магазин (все товары)", "url": f"https://t.me/{me(s)}/shop"}]]}
+    return {"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]}
 
 def sync_stock(s, chat=None):
     """Убирает товары Uzum без остатка и обновляет список размеров/вариантов по наличию."""
@@ -687,6 +686,11 @@ def handle(s, u):
 def main():
     s = load(); end = time.time() + RUN_SECONDS
     try:
+        if s.get("kb_v") != 2:  # одноразово: у старых постов оставляем только кнопку магазина
+            s["kb_v"] = 2
+            for pid, p in s["products"].items():
+                if p.get("msgs") and not p.get("hidden"):
+                    tg("editMessageReplyMarkup", chat_id=CHANNEL, message_id=p["msgs"][-1], reply_markup=product_kb(s, pid))
         export_catalog(s)
         tg("setChatMenuButton", menu_button={"type": "web_app", "text": "🛍 Магазин", "web_app": {"url": WEBAPP_URL}})
     except Exception as e:
