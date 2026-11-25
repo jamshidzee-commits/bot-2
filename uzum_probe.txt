@@ -1,9 +1,21 @@
-product: skus=6 distinct sku images=2
-product: skus=10 distinct sku images=2
-product: skus=20 distinct sku images=5
-product: skus=2 distinct sku images=2
-product: skus=2 distinct sku images=1
-/v1/product/ID -> 403
-/v2/product/ID -> 403
-/v1/product/shop/SHOP/ID -> 404
-sku photo/characteristicsList keys: {'photo': 'NoneType', 'cl': [{'characteristicTitle': 'dict', 'definedType': 'bool', 'characteristicValue': 'dict'}]}
+/v1/invoice ['page', 'size'] -> 200
+   [{'id': 'int', 'shopId': 'int', 'shopTitle': 'str', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'productForInvoiceDto': [{'id': 'int', 'skuTitle': 'str', 'productTitle': 'str', 'quantityToStock': 'int', 'quantityAccepted': 'int', 'purchasePrice': 'int', 'skuForInvoiceDtoList': 'list'}], 'ettnDto': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}}]
+/v1/fbo/invoice ['page', 'size'] -> 403
+/v2/fbo/invoice ['page', 'size'] -> 403
+/v1/supply ['page', 'size'] -> 403
+/v1/fbo/supply ['page', 'size'] -> 403
+/v1/invoices ['page', 'size'] -> 403
+/v1/invoice ['page', 'size', 'shopId'] -> 200
+   [{'id': 'int', 'shopId': 'int', 'shopTitle': 'str', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'productForInvoiceDto': [{'id': 'int', 'skuTitle': 'str', 'productTitle': 'str', 'quantityToStock': 'int', 'quantityAccepted': 'int', 'purchasePrice': 'int', 'skuForInvoiceDtoList': 'list'}], 'ettnDto': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}}]
+/v1/fbo/invoice ['page', 'size', 'shopId'] -> 403
+/v2/fbo/invoice ['page', 'size', 'shopId'] -> 403
+/v1/shop/90091/invoice ['page', 'size', 'shopId'] -> 200
+   [{'id': 'int', 'invoiceNumber': 'int', 'deliveryCertificate': 'NoneType', 'dateCreated': 'str', 'status': 'str', 'invoiceStatus': {'text': 'str', 'color': 'str', 'value': 'str'}, 'fullPrice': 'int', 'timeSlotReservation': 'NoneType', 'totalAccepted': 'int', 'totalToStock': 'int', 'remainingAmountOfUpdates': 'int', 'dateAccepted': 'NoneType', 'expressAcceptanceDate': 'NoneType', 'stock': {'id': 'int', 'externalId': 'str', 'title': 'str', 'address': 'str', 'timeFrom': 'str', 'timeTo': 'str', 'poolSource': 'str', 'dimensionalGroups': [{'group': 'str', 'title': 'str'}]}, 'hasIssue': 'bool', 'externalNumber': 'NoneType', 'invoiceEttn': {'isEditable': 'bool', 'warningFlag': 'bool', 'slaEttnUpdate': 'NoneType', 'ettn': 'NoneType'}, 'fines': [], 'createdInvoiceCount': 'int'}]
+/v1/invoice/products ['invoiceId', 'page', 'size'] -> 404
+/v1/fbo/invoice/products ['invoiceId', 'page', 'size'] -> 403
+/v1/invoice/110004288155 ['invoiceId', 'page', 'size'] -> 404
+/v1/fbo/invoice/110004288155 ['invoiceId', 'page', 'size'] -> 403
+/v1/invoice/products ['invoiceId', 'page', 'size'] -> 404
+/v1/fbo/invoice/products ['invoiceId', 'page', 'size'] -> 403
+/v1/invoice/110004284738 ['invoiceId', 'page', 'size'] -> 404
+/v1/fbo/invoice/110004284738 ['invoiceId', 'page', 'size'] -> 403
