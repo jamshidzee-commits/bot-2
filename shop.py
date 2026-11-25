@@ -7,6 +7,8 @@ ADMIN = str(os.environ.get("ADMIN_CHAT_ID") or "")
 DISCOUNT = float(os.environ.get("DISCOUNT_PERCENT") or 20)
 DELIVERY_FEE = int(os.environ.get("DELIVERY_FEE") or 25000)
 PAY_INFO = os.environ.get("PAY_INFO") or "Реквизиты для оплаты будут отправлены администратором."
+UZUM_KEY = (os.environ.get("UZUM_API_KEY") or "").strip()
+UZUM = "https://api-seller.uzum.uz/api/seller-openapi"
 RUN_SECONDS = int(os.environ.get("RUN_SECONDS") or 55 * 60)
 TG = f"https://api.telegram.org/bot{TOKEN}/"
 STATE = "state.json"
@@ -102,6 +104,8 @@ def publish(s, did):
     d = s["drafts"].pop(did, None)
     if not d:
         return "Уже обработано"
+    if d.get("uzum_id"):
+        s.setdefault("uzum_done", []).append(d["uzum_id"])
     pid = str(s["next_product"]); s["next_product"] += 1
     s["products"][pid] = d
     kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}]]}
@@ -114,6 +118,69 @@ def publish(s, did):
         tg("sendMediaGroup", chat_id=CHANNEL, media=media)
         tg("sendMessage", chat_id=CHANNEL, text=f"👆 {esc(d['title'])}", parse_mode="HTML", reply_markup=kb)
     return "Опубликовано в канале"
+
+
+# ---------- Uzum: загрузка своих карточек ----------
+def uzum_get(path, **params):
+    r = requests.get(UZUM + path, headers={"Authorization": UZUM_KEY}, params=params, timeout=40)
+    r.raise_for_status()
+    return r.json()
+
+def uzum_img(x):
+    if not x:
+        return None
+    return x if x.startswith("http") else f"https://images.uzum.uz/{x}/original.jpg"
+
+def uzum_products():
+    """Все товары всех магазинов продавца, в наличии."""
+    out = []
+    for sh in uzum_get("/v1/shops"):
+        page = 0
+        while page < 40:
+            j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=50, page=page)
+            lst = j.get("productList") or []
+            for pr in lst:
+                skus = [k for k in pr.get("skuList", []) if (k.get("quantityAvailable") or 0) > 0 and not k.get("archived") and not k.get("blocked")]
+                if not skus:
+                    continue
+                price = min((k.get("price") or 0) for k in skus) or pr.get("price") or 0
+                opts = []
+                for k in skus:
+                    c = (k.get("characteristics") or k.get("skuTitle") or "").strip()
+                    if c and c not in opts:
+                        opts.append(c)
+                img = uzum_img(pr.get("previewImg") or pr.get("image") or (skus[0].get("previewImage")))
+                if price and img:
+                    out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
+                                "photo": img, "opts": opts[:12]})
+            if len(lst) < 50:
+                break
+            page += 1
+    return out
+
+def uzum_offer(s, chat):
+    if not UZUM_KEY:
+        tg("sendMessage", chat_id=chat, text="Ключ Uzum не подключён (секрет UZUM_API_KEY).")
+        return
+    try:
+        items = uzum_products()
+    except Exception as e:
+        tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum API: {type(e).__name__}")
+        return
+    done = set(s.setdefault("uzum_done", []))
+    new = [i for i in items if i["id"] not in done]
+    tg("sendMessage", chat_id=chat, text=f"Товаров в наличии на Uzum: {len(items)}, ещё не в канале: {len(new)}. Показываю до 10.")
+    for i in new[:10]:
+        d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": [i["photo"]],
+             "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"]}
+        did = f"u{i['id']}"
+        s["drafts"][did] = d
+        r = tg("sendPhoto", chat_id=chat, photo=i["photo"], parse_mode="HTML",
+               caption=product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])})",
+               reply_markup={"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
+                                                  {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]})
+        if not r.get("ok"):
+            tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
 
 # ---------- покупатель: заказ ----------
 def start_order(s, chat, user, pid):
@@ -177,7 +244,13 @@ def callback(s, cq):
     act, _, arg = data.partition(":")
     ans = ""
     if act in ("pub", "del") and who == ADMIN:
-        ans = publish(s, arg) if act == "pub" else ("Отменено" if s["drafts"].pop(arg, None) or True else "")
+        if act == "pub":
+            ans = publish(s, arg)
+        else:
+            dd = s["drafts"].pop(arg, None)
+            if dd and dd.get("uzum_id"):
+                s.setdefault("uzum_done", []).append(dd["uzum_id"])
+            ans = "Пропущено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
     elif act == "paid":
         ses = s["sessions"].get(str(chat))
@@ -224,10 +297,12 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/uzum"):
+            return uzum_offer(s, chat)
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
