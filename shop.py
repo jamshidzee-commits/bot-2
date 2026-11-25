@@ -337,8 +337,8 @@ def collect_codes(x, out):
             collect_codes(v, out)
 
 def supply_codes(numbers):
-    """Коды товаров из поставок Uzum по их номерам. Возвращает (коды, найденные номера, подсказка)."""
-    want = set(numbers); found, codes, hint = set(), set(), ""
+    """Коды SKU и количества из поставок Uzum. Возвращает (коды, найденные номера, подсказка, {sku: штук}, {номер: штук})."""
+    want = set(numbers); found, qty, per, hint, seen = set(), {}, {}, "", set()
     for shop in uzum_get("/v1/shops"):
         for page in range(0, 30):
             try:
@@ -351,18 +351,22 @@ def supply_codes(numbers):
                 full = str(inv.get("invoiceNumber"))
                 # в API номер на одну цифру длиннее, чем в кабинете: сравниваем по началу
                 n = next((w for w in want if full == w or full.startswith(w)), None)
-                if n:
-                    found.add(n)
+                if n and full not in seen:
+                    seen.add(full); found.add(n)
                     for pd in inv.get("productForInvoiceDto") or []:
                         # строка поставки: id = товар, во вложенном списке id = SKU (размер/цвет) и их количество
                         for sk in pd.get("skuForInvoiceDtoList") or []:
-                            if (sk.get("quantityToStock") or 0) > 0 and sk.get("id") is not None:
-                                codes.add(str(sk["id"]))
+                            q = sk.get("quantityToStock") or 0
+                            if q > 0 and sk.get("id") is not None:
+                                qty[str(sk["id"])] = qty.get(str(sk["id"]), 0) + q
+                                per[n] = per.get(n, 0) + q
                         if not hint and pd.get("skuForInvoiceDtoList"):
                             hint = ",".join(sorted(pd["skuForInvoiceDtoList"][0].keys()))
-            if found >= want:
-                return codes, found, hint
-    return codes, found, hint
+            if found >= want and all(w in per or True for w in want):
+                break
+        if found >= want:
+            break
+    return set(qty), found, hint, qty, per
 
 def product_kb(s, pid):
     return {"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]}
@@ -629,20 +633,20 @@ def handle(s, u):
                 tg("sendMessage", chat_id=chat, text="Пришлите номера поставок Uzum:\n/supply 110004288155 110004284738 ...")
                 return
             try:
-                codes, found, hint = supply_codes(nums)
+                codes, found, hint, qty, per = supply_codes(nums)
             except Exception as e:
                 tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum: {type(e).__name__}"); return
             miss = [n for n in nums if n not in found]
             if not codes:
                 tg("sendMessage", chat_id=chat, text=f"Поставки не найдены или пустые. Не найдены: {', '.join(miss) or '—'}. Поля: {hint}")
                 return
-            s["mystock"] = sorted(codes); s["mystock_instock"] = False  # остаток на складе Uzum не важен: твоя наличие = то, что в поставках
+            s["mystock"] = sorted(codes); s["stock_qty"] = qty; s["mystock_instock"] = False  # остаток на складе Uzum не важен: твоя наличие = то, что в поставках
             try:
                 items = uzum_products(s["mystock"], False)
             except Exception as e:
                 tg("sendMessage", chat_id=chat, text=f"Поставки прочитаны, но Uzum не ответил: {type(e).__name__}"); return
             tg("sendMessage", chat_id=chat, text=f"Поставок найдено: {len(found)} из {len(nums)}" + (f" (нет: {', '.join(miss)})" if miss else "") +
-               f".\nТоваров в этих поставках: {len(items)}, размеров/вариантов: {len(codes)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
+               f".\nВсего штук: {sum(qty.values())} (" + " + ".join(str(per.get(n, 0)) for n in nums) + f").\nТоваров: {len(items)}, размеров/вариантов: {len(codes)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
             sync_stock(s, chat)  # сразу убираем ранее опубликованные товары, которых нет в поставках
             return
         if text.startswith("/mystock"):
