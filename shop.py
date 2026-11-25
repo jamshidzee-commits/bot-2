@@ -120,6 +120,8 @@ def flush_albums(s):
             make_draft(s, a["photos"], a["caption"])
 
 def make_draft(s, photos, cap):
+    if cap and cap.strip().startswith("+"):
+        return add_photos(s, cap.strip()[1:].split()[0], photos)
     d = parse_caption(cap)
     if not d:
         tg("sendMessage", chat_id=ADMIN, text="Подпись должна быть такой:\n<code>Название | цена на Uzum | краткое описание</code>\nНапример: <code>Худи мужское | 250000 | Хлопок, размеры S–XL</code>", parse_mode="HTML")
@@ -132,6 +134,54 @@ def make_draft(s, photos, cap):
        reply_markup={"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
                                           {"text": "❌ Отмена", "callback_data": f"del:{did}"}]]})
 
+def post_to_channel(s, pid):
+    d = s["products"][pid]
+    kb = product_kb(s, pid)
+    ids = d.get("photo_ids", {})
+    photos = [ids.get(u, u) for u in d["photos"][:10]]
+    cap = product_caption(d)
+    msgs = []
+    if len(photos) == 1:
+        r = tg("sendPhoto", chat_id=CHANNEL, photo=photos[0], caption=cap, parse_mode="HTML", reply_markup=kb)
+        if r.get("ok"):
+            msgs.append(r["result"]["message_id"])
+    else:
+        media = [{"type": "photo", "media": f} for f in photos]
+        media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
+        r = tg("sendMediaGroup", chat_id=CHANNEL, media=media)
+        if r.get("ok"):
+            msgs += [m["message_id"] for m in r["result"]]
+        r = tg("sendMessage", chat_id=CHANNEL, text=f"👆 {esc(d['title'])}", parse_mode="HTML", reply_markup=kb)
+        if r.get("ok"):
+            msgs.append(r["result"]["message_id"])
+    d["msgs"] = msgs
+
+def add_photos(s, pid, fids):
+    """Дополнительные фото к опубликованному товару: сохраняем в docs/img (для приложения) и переопубликуем пост."""
+    p = s["products"].get(pid)
+    if not p:
+        tg("sendMessage", chat_id=ADMIN, text="Не нашёл такой товар. Номера: /list"); return
+    os.makedirs("docs/img", exist_ok=True)
+    p.setdefault("photo_ids", {})
+    for n, fid in enumerate(fids):
+        info = tg("getFile", file_id=fid).get("result") or {}
+        if not info.get("file_path"):
+            continue
+        try:
+            data = requests.get(f"https://api.telegram.org/file/bot{TOKEN}/{info['file_path']}", timeout=60).content
+        except Exception as e:
+            print("download", type(e).__name__); continue
+        name = f"{pid}_{int(time.time())}_{n}.jpg"
+        open(f"docs/img/{name}", "wb").write(data)
+        url = WEBAPP_URL + "img/" + name
+        p["photos"].append(url); p["photo_ids"][url] = fid
+    p["photos"] = p["photos"][:10]
+    for m in p.get("msgs", []):
+        tg("deleteMessage", chat_id=CHANNEL, message_id=m)
+    post_to_channel(s, pid)
+    export_catalog(s)
+    tg("sendMessage", chat_id=ADMIN, text=f"Добавлено фото. Теперь у товара «{p['title'][:40]}» {len(p['photos'])} фото. Пост в канале обновлён, в приложении фото появятся через 1–2 минуты.")
+
 def publish(s, did):
     d = s["drafts"].pop(did, None)
     if not d:
@@ -141,24 +191,7 @@ def publish(s, did):
     pid = str(s["next_product"]); s["next_product"] += 1
     s["products"][pid] = d
     export_catalog(s)
-    kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}],
-                              [{"text": "🛍 Магазин (все товары)", "url": f"https://t.me/{me(s)}/shop"}]]}
-    cap = product_caption(d)
-    msgs = []
-    if len(d["photos"]) == 1:
-        r = tg("sendPhoto", chat_id=CHANNEL, photo=d["photos"][0], caption=cap, parse_mode="HTML", reply_markup=kb)
-        if r.get("ok"):
-            msgs.append(r["result"]["message_id"])
-    else:
-        media = [{"type": "photo", "media": f} for f in d["photos"][:10]]
-        media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
-        r = tg("sendMediaGroup", chat_id=CHANNEL, media=media)
-        if r.get("ok"):
-            msgs += [m["message_id"] for m in r["result"]]
-        r = tg("sendMessage", chat_id=CHANNEL, text=f"👆 {esc(d['title'])}", parse_mode="HTML", reply_markup=kb)
-        if r.get("ok"):
-            msgs.append(r["result"]["message_id"])
-    d["msgs"] = msgs
+    post_to_channel(s, pid)
     return "Опубликовано в канале"
 
 
@@ -643,7 +676,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
