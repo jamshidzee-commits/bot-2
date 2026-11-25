@@ -144,13 +144,21 @@ def publish(s, did):
     kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}],
                               [{"text": "🛍 Магазин (все товары)", "url": f"https://t.me/{me(s)}/shop"}]]}
     cap = product_caption(d)
+    msgs = []
     if len(d["photos"]) == 1:
-        tg("sendPhoto", chat_id=CHANNEL, photo=d["photos"][0], caption=cap, parse_mode="HTML", reply_markup=kb)
+        r = tg("sendPhoto", chat_id=CHANNEL, photo=d["photos"][0], caption=cap, parse_mode="HTML", reply_markup=kb)
+        if r.get("ok"):
+            msgs.append(r["result"]["message_id"])
     else:
         media = [{"type": "photo", "media": f} for f in d["photos"][:10]]
         media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
-        tg("sendMediaGroup", chat_id=CHANNEL, media=media)
-        tg("sendMessage", chat_id=CHANNEL, text=f"👆 {esc(d['title'])}", parse_mode="HTML", reply_markup=kb)
+        r = tg("sendMediaGroup", chat_id=CHANNEL, media=media)
+        if r.get("ok"):
+            msgs += [m["message_id"] for m in r["result"]]
+        r = tg("sendMessage", chat_id=CHANNEL, text=f"👆 {esc(d['title'])}", parse_mode="HTML", reply_markup=kb)
+        if r.get("ok"):
+            msgs.append(r["result"]["message_id"])
+    d["msgs"] = msgs
     return "Опубликовано в канале"
 
 
@@ -176,8 +184,12 @@ def best_img(url):
             pass
     return url
 
+UZUM_ERRORS = 0
+
 def uzum_products():
     """Все товары всех магазинов продавца, в наличии."""
+    global UZUM_ERRORS
+    UZUM_ERRORS = 0
     out = []
     for sh in uzum_get("/v1/shops"):
         page = 0
@@ -186,6 +198,8 @@ def uzum_products():
                 j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
             except requests.HTTPError as e:
                 print("UZUM shop", sh["id"], "->", e.response.status_code)
+                if e.response.status_code != 403:  # 403 = ключ не даёт доступ к чужому магазину, это нормально
+                    UZUM_ERRORS += 1
                 break
             lst = j.get("productList") or []
             for pr in lst:
@@ -249,6 +263,31 @@ def uzum_offer(s, chat):
             r = tg("sendPhoto", chat_id=chat, photo=d["photos"][0], parse_mode="HTML", caption=cap, reply_markup=kb)
             if not r.get("ok"):
                 tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
+
+def remove_product(s, pid):
+    p = s["products"].get(pid)
+    if not p:
+        return False
+    for m in p.get("msgs", []):
+        tg("deleteMessage", chat_id=CHANNEL, message_id=m)
+    p["msgs"] = []; p["hidden"] = True
+    export_catalog(s)
+    return True
+
+def sync_stock(s, chat=None):
+    """Убирает из канала и приложения товары Uzum, которых нет в наличии."""
+    if not UZUM_KEY:
+        return
+    try:
+        have = {i["id"] for i in uzum_products()}
+    except Exception as e:
+        print("sync", repr(e)[:200]); return
+    if UZUM_ERRORS:
+        print("sync: ошибки Uzum, пропускаю"); return
+    gone = [pid for pid, p in s["products"].items() if p.get("uzum_id") and not p.get("hidden") and p["uzum_id"] not in have]
+    names = [s["products"][pid]["title"] for pid in gone if remove_product(s, pid)]
+    if chat is not None or names:
+        tg("sendMessage", chat_id=chat or ADMIN, text=("Убраны из канала и приложения (нет в наличии):\n• " + "\n• ".join(names)) if names else "Все опубликованные товары в наличии.")
 
 # ---------- покупатель: заказ ----------
 def cart_of(s, chat):
@@ -436,6 +475,17 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/sync"):
+            return sync_stock(s, chat)
+        if text.startswith("/list"):
+            lines = [f"{pid}. {p['title'][:50]} — {money(p['price'])}" for pid, p in s["products"].items() if not p.get("hidden")]
+            tg("sendMessage", chat_id=chat, text=("Товары в магазине:\n" + "\n".join(lines) + "\n\nУдалить: /del НОМЕР") if lines else "Товаров нет.")
+            return
+        if text.startswith("/del"):
+            arg = text.split(maxsplit=1)[1].strip() if " " in text else ""
+            ok = remove_product(s, arg)
+            tg("sendMessage", chat_id=chat, text="Удалено из канала и приложения." if ok else "Не нашёл такой номер. Список: /list")
+            return
         if text.startswith("/pin"):
             r = tg("sendMessage", chat_id=CHANNEL, text="🛍 Весь ассортимент — в нашем магазине. Откройте и выбирайте:",
                    reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]})
@@ -450,7 +500,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Закрепить кнопку магазина в канале: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
@@ -476,6 +526,12 @@ def main():
             except Exception as e:
                 print("ERR", e)
         flush_albums(s)
+        if time.time() - s.get("last_sync", 0) > 1800:
+            s["last_sync"] = time.time()
+            try:
+                sync_stock(s)
+            except Exception as e:
+                print("sync err", e)
         save(s)
 
 if __name__ == "__main__":
