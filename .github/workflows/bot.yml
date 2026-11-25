@@ -39,7 +39,7 @@ jobs:
           git fetch -q origin main && git reset -q --hard origin/main
           save() {
             touch state.json
-            git add state.json
+            git add state.json docs/products.json 2>/dev/null
             git diff --cached --quiet && return 0
             git commit -q -m "update state"
             for i in 1 2 3 4 5; do

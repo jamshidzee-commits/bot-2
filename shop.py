@@ -71,6 +71,26 @@ def product_caption(p):
     t += f"\n💰 Цена: <b>{money(p['price'])}</b>\n🚚 Доставка EMU Post — платная (считается при заказе)"
     return t
 
+WEBAPP_URL = os.environ.get("WEBAPP_URL") or "https://jamshidzee-commits.github.io/online-shop-bot/"
+
+def export_catalog(s):
+    """Каталог для мини-приложения (docs/products.json) — только товары с фото-ссылкой."""
+    items = []
+    for pid, p in s["products"].items():
+        ph = (p.get("photos") or [""])[0]
+        if p.get("hidden") or not ph.startswith("http"):
+            continue
+        items.append({"id": pid, "title": p["title"], "price": p["price"], "old": p.get("uzum", 0), "photo": ph,
+                      "opts": p.get("opts", []), "desc": p.get("desc", "")})
+    os.makedirs("docs", exist_ok=True)
+    data = json.dumps({"bot": me(s), "products": items[::-1]}, ensure_ascii=False)
+    try:
+        if open("docs/products.json", encoding="utf-8").read() == data:
+            return
+    except Exception:
+        pass
+    open("docs/products.json", "w", encoding="utf-8").write(data)
+
 # ---------- admin: новая карточка ----------
 def parse_caption(cap):
     parts = [x.strip() for x in (cap or "").split("|")]
@@ -120,6 +140,7 @@ def publish(s, did):
         s.setdefault("uzum_done", []).append(d["uzum_id"])
     pid = str(s["next_product"]); s["next_product"] += 1
     s["products"][pid] = d
+    export_catalog(s)
     kb = {"inline_keyboard": [[{"text": "🛒 Заказать", "url": f"https://t.me/{me(s)}?start=p{pid}"}]]}
     cap = product_caption(d)
     if len(d["photos"]) == 1:
@@ -202,7 +223,7 @@ def uzum_offer(s, chat):
     for i in new[:10]:
         i["photo"] = best_img(i["photo"])
         d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": [i["photo"]],
-             "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"]}
+             "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"], "opts": i["opts"]}
         did = f"u{i['id']}"
         s["drafts"][did] = d
         r = tg("sendPhoto", chat_id=chat, photo=i["photo"], parse_mode="HTML",
@@ -233,11 +254,33 @@ def start_order(s, chat, user, pid):
     tg("sendPhoto", chat_id=chat, photo=p["photos"][0], parse_mode="HTML", caption=product_caption(p))
     tg("sendMessage", chat_id=chat, text="Напишите размер, цвет и количество (или «-», если не нужно):")
 
+def start_cart(s, chat, user, code):
+    items = []
+    for part in code.split("-"):
+        try:
+            pid, oi, q = part.split("_"); p = s["products"].get(pid)
+            if not p:
+                continue
+            oi, q = int(oi), max(1, min(int(q), 20))
+            opts = p.get("opts") or []
+            items.append({"pid": pid, "qty": q, "note": opts[oi] if oi < len(opts) else ""})
+        except Exception:
+            continue
+    if not items:
+        tg("sendMessage", chat_id=chat, text="Корзина пуста или товары больше недоступны. Откройте магазин заново.")
+        return
+    s.setdefault("carts", {})[str(chat)] = items
+    s["sessions"][str(chat)] = {"step": "cart", "user": user}
+    body, total = cart_text(s, items)
+    tg("sendMessage", chat_id=chat, parse_mode="HTML", text=f"🛒 Ваш заказ:\n{body}\n\nТовары: {money(total)} (доставка считается дальше)",
+       reply_markup={"inline_keyboard": [[{"text": "✅ Оформить заказ", "callback_data": "checkout:1"}],
+                                         [{"text": "🗑 Очистить корзину", "callback_data": "clear:1"}]]})
+
 def cart_text(s, items):
     lines, total = [], 0
     for n, it in enumerate(items, 1):
-        p = s["products"][it["pid"]]; total += p["price"]
-        lines.append(f"{n}. {esc(p['title'])} — {money(p['price'])}" + (f"\n    📝 {esc(it['note'])}" if it.get("note") else ""))
+        p = s["products"][it["pid"]]; q = it.get("qty", 1); total += p["price"] * q
+        lines.append(f"{n}. {esc(p['title'])}" + (f" × {q}" if q > 1 else "") + f" — {money(p['price'] * q)}" + (f"\n    📝 {esc(it['note'])}" if it.get("note") else ""))
     return "\n".join(lines), total
 
 def order_items(s, o):
@@ -251,7 +294,7 @@ def order_text(s, o):
             f"<b>Итого: {money(total + o['fee'])}</b>")
 
 def items_weight(items):
-    return len(items) * WEIGHT_KG
+    return sum(i.get("qty", 1) for i in items) * WEIGHT_KG
 
 def customer_step(s, chat, msg):
     ses = s["sessions"].get(str(chat))
@@ -367,9 +410,12 @@ def handle(s, u):
         return
     if text.startswith("/start"):
         arg = text.split(maxsplit=1)[1] if " " in text else ""
+        if arg.startswith("c"):
+            return start_cart(s, chat, msg["from"].get("username"), arg[1:])
         if arg.startswith("p"):
             return start_order(s, chat, msg["from"].get("username"), arg[1:])
-        tg("sendMessage", chat_id=chat, text="Здравствуйте! Выберите товар в нашем канале и нажмите «🛒 Заказать».\n" + (f"https://t.me/{CHANNEL.lstrip('@')}" if CHANNEL.startswith("@") else ""))
+        tg("sendMessage", chat_id=chat, text="Здравствуйте! Откройте магазин кнопкой ниже или выберите товар в нашем канале.",
+           reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "web_app": {"url": WEBAPP_URL}}]]})
         return
     if uid == ADMIN:
         if text.startswith("/track"):
@@ -396,6 +442,11 @@ def handle(s, u):
 
 def main():
     s = load(); end = time.time() + RUN_SECONDS
+    try:
+        export_catalog(s)
+        tg("setChatMenuButton", menu_button={"type": "web_app", "text": "🛍 Магазин", "web_app": {"url": WEBAPP_URL}})
+    except Exception as e:
+        print("catalog/menu", e)
     if not ADMIN:
         print("ADMIN_CHAT_ID не задан: админ-функции отключены (бот отвечает на /id)")
     while time.time() < end:

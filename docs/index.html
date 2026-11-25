@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Магазин</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#f4f4f6;--card:#fff;--text:#14141a;--muted:#8a8a96;--accent:#6c2bd9;--red:#e5334b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:84px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 12px 8px}
+header input{width:100%;border:0;border-radius:12px;padding:12px 14px;font-size:15px;background:#fff;outline:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 12px}
+.card{background:var(--card);border-radius:14px;overflow:hidden;position:relative}
+.card img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#e9e9ee}
+.badge{position:absolute;top:8px;left:8px;background:var(--red);color:#fff;border-radius:8px;padding:2px 7px;font-size:12px;font-weight:700}
+.info{padding:8px 10px 10px}
+.price{font-weight:800;font-size:17px}
+.old{color:var(--muted);text-decoration:line-through;font-size:13px;margin-left:6px}
+.title{margin:4px 0 8px;color:#3a3a44;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em}
+button{font:inherit;border:0;cursor:pointer}
+.add{width:100%;background:#ece3fb;color:var(--accent);border-radius:10px;padding:10px;font-weight:700}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:10px 12px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -2px 12px rgba(0,0,0,.08);display:none}
+.bar button{width:100%;background:var(--accent);color:#fff;border-radius:12px;padding:14px;font-weight:700;font-size:16px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:10}
+.sheet .in{background:#fff;border-radius:18px 18px 0 0;width:100%;max-height:90vh;overflow:auto;padding:14px}
+.sheet img{width:100%;max-height:48vh;object-fit:contain;border-radius:12px;background:#f1f1f4}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.opt{border:1px solid #d6d6de;background:#fff;border-radius:10px;padding:8px 12px}
+.opt.on{border-color:var(--accent);background:#ece3fb;color:var(--accent);font-weight:700}
+.primary{width:100%;background:var(--accent);color:#fff;border-radius:12px;padding:14px;font-weight:700;font-size:16px;margin-top:8px}
+.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #eee}
+.row img{width:56px;height:72px;object-fit:cover;border-radius:8px;max-height:none}
+.row .t{flex:1}
+.q{display:flex;align-items:center;gap:8px}
+.q button{width:30px;height:30px;border-radius:8px;background:#ece3fb;color:var(--accent);font-size:18px}
+.empty{text-align:center;color:var(--muted);padding:40px 12px}
+.note{color:var(--muted);font-size:13px;margin:8px 0}
+</style></head><body>
+<header><input id="q" placeholder="Поиск товаров" oninput="render()"></header>
+<div class="grid" id="grid"></div>
+<div class="empty" id="empty" style="display:none">Товаров пока нет</div>
+<div class="bar" id="bar"><button onclick="openCart()" id="barBtn"></button></div>
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div class="in" id="sheetIn"></div></div>
+<script>
+const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand();}
+const BOT="Online_magazin12jam_bot";
+let P=[],cart=[];try{cart=JSON.parse(localStorage.getItem("cart")||"[]")}catch(e){}
+const fmt=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g," ")+" сум";
+const save=()=>{try{localStorage.setItem("cart",JSON.stringify(cart))}catch(e){}};
+fetch("products.json?"+Date.now()).then(r=>r.json()).then(d=>{P=d.products||[];BOTU=d.bot||BOT;render();bar();});
+let BOTU=BOT;
+function render(){
+  const q=document.getElementById("q").value.toLowerCase();
+  const L=P.filter(p=>!q||p.title.toLowerCase().includes(q));
+  document.getElementById("empty").style.display=L.length?"none":"block";
+  document.getElementById("grid").innerHTML=L.map(p=>{
+    const off=p.old>p.price?Math.round((1-p.price/p.old)*100):0;
+    return `<div class="card" onclick="openP('${p.id}')">${off?`<span class="badge">−${off}%</span>`:""}
+    <img loading="lazy" src="${p.photo}" alt=""><div class="info"><div><span class="price">${fmt(p.price)}</span>${p.old>p.price?`<span class="old">${fmt(p.old)}</span>`:""}</div>
+    <div class="title">${esc(p.title)}</div><button class="add">В корзину</button></div></div>`}).join("");
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let cur=null,opt=0;
+function openP(id){
+  cur=P.find(p=>p.id===id);opt=0;const p=cur;
+  const opts=p.opts&&p.opts.length?`<div class="note">Вариант:</div><div class="opts" id="opts">${p.opts.map((o,i)=>`<button class="opt ${i===0?"on":""}" onclick="pick(${i})">${esc(o)}</button>`).join("")}</div>`:"";
+  show(`<img src="${p.photo}" alt=""><h3 style="margin:10px 0 4px">${esc(p.title)}</h3>
+  <div><span class="price">${fmt(p.price)}</span>${p.old>p.price?`<span class="old">${fmt(p.old)}</span>`:""}</div>
+  ${p.desc&&!p.desc.startsWith("Варианты")?`<p>${esc(p.desc)}</p>`:""}${opts}
+  <div class="note">🚚 Доставка EMU Post считается при оформлении</div>
+  <button class="primary" onclick="addCur()">Добавить в корзину</button>`);
+}
+function pick(i){opt=i;document.querySelectorAll("#opts .opt").forEach((b,j)=>b.classList.toggle("on",i===j));}
+function addCur(){
+  const k=cart.find(c=>c.id===cur.id&&c.o===opt);
+  if(k)k.q++;else cart.push({id:cur.id,o:opt,q:1});
+  save();bar();closeSheet();if(tg&&tg.HapticFeedback)tg.HapticFeedback.impactOccurred("light");
+}
+function show(h){document.getElementById("sheetIn").innerHTML=h;document.getElementById("sheet").style.display="flex";}
+function closeSheet(){document.getElementById("sheet").style.display="none";}
+function total(){return cart.reduce((s,c)=>{const p=P.find(x=>x.id===c.id);return s+(p?p.price*c.q:0)},0);}
+function count(){return cart.reduce((s,c)=>s+c.q,0);}
+function bar(){const b=document.getElementById("bar");b.style.display=cart.length?"block":"none";
+  document.getElementById("barBtn").textContent=`🛒 Корзина · ${count()} шт · ${fmt(total())}`;}
+function openCart(){
+  if(!cart.length){closeSheet();return;}
+  const rows=cart.map((c,i)=>{const p=P.find(x=>x.id===c.id);if(!p)return"";
+    return `<div class="row"><img src="${p.photo}" alt=""><div class="t"><div>${esc(p.title)}</div>
+    <div class="note">${p.opts&&p.opts[c.o]?esc(p.opts[c.o]):""}</div><b>${fmt(p.price*c.q)}</b></div>
+    <div class="q"><button onclick="chg(${i},-1)">−</button><b>${c.q}</b><button onclick="chg(${i},1)">+</button></div></div>`}).join("");
+  show(`<h3 style="margin:0 0 4px">Корзина</h3>${rows}<p><b>Товары: ${fmt(total())}</b></p>
+  <div class="note">Доставку EMU Post и оплату выберете в чате с ботом на следующем шаге.</div>
+  <button class="primary" onclick="checkout()">Оформить заказ</button>`);
+}
+function chg(i,d){cart[i].q+=d;if(cart[i].q<=0)cart.splice(i,1);save();bar();openCart();}
+function checkout(){
+  const code=cart.map(c=>`${c.id}_${c.o}_${c.q}`).join("-").slice(0,60);
+  const url=`https://t.me/${BOTU}?start=c${code}`;
+  if(tg&&tg.openTelegramLink){tg.openTelegramLink(url);setTimeout(()=>tg.close(),300);}else location.href=url;
+}
+</script></body></html>
