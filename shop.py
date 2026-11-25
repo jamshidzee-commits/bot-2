@@ -13,6 +13,18 @@ RUN_SECONDS = int(os.environ.get("RUN_SECONDS") or 55 * 60)
 TG = f"https://api.telegram.org/bot{TOKEN}/"
 STATE = "state.json"
 
+# EMU Post: доставка до пункта выдачи (ПВЗ), тариф "Do ofisa", отправка из Ташкентской области (Янгиюль).
+REGIONS = [("Каракалпакстан", 3), ("Андижан", 2), ("Бухара", 3), ("Джизак", 2), ("Кашкадарья", 3), ("Навои", 3), ("Наманган", 2),
+           ("Самарканд", 2), ("Сурхандарья", 4), ("Сырдарья", 1), ("Ташкентская обл.", 0), ("Фергана", 2), ("Хорезм", 3), ("г. Ташкент", 1)]
+BASE_1KG = [22000, 25000, 27000, 29000, 33000]   # первый кг, по зонам 0..4
+EXTRA_KG = [3000, 6000, 7000, 8000, 9000]        # каждый следующий кг (до 20 кг)
+VAT = 1.06
+WEIGHT_KG = float(os.environ.get("DEFAULT_WEIGHT_KG") or 1)
+
+def delivery_fee(zone, kg=None):
+    kg = max(1, int(-(-(kg or WEIGHT_KG) // 1)))
+    return int(round((BASE_1KG[zone] + EXTRA_KG[zone] * (kg - 1)) * VAT))
+
 def load():
     try:
         s = json.load(open(STATE, encoding="utf-8"))
@@ -56,7 +68,7 @@ def product_caption(p):
     t = f"<b>{esc(p['title'])}</b>\n"
     if p.get("desc"):
         t += f"\n{esc(p['desc'])}\n"
-    t += f"\n💰 Цена: <b>{money(p['price'])}</b>\n🚚 Доставка EMU Post — платная"
+    t += f"\n💰 Цена: <b>{money(p['price'])}</b>\n🚚 Доставка EMU Post — платная (считается при заказе)"
     return t
 
 # ---------- admin: новая карточка ----------
@@ -220,10 +232,10 @@ def start_order(s, chat, user, pid):
 
 def order_text(o, p):
     return (f"<b>Заказ №{o['id']}</b>: {esc(p['title'])}\n"
-            f"👤 {esc(o['name'])}\n📞 {esc(o['phone'])}\n📍 {esc(o['address'])}\n"
+            f"👤 {esc(o['name'])}\n📞 {esc(o['phone'])}\n📍 {esc(o.get('region',''))}, {esc(o['address'])}\n"
             f"📝 {esc(o.get('comment') or '—')}\n\n"
-            f"Товар: {money(p['price'])}\nДоставка EMU Post: {money(DELIVERY_FEE)}\n"
-            f"<b>Итого: {money(p['price'] + DELIVERY_FEE)}</b>")
+            f"Товар: {money(p['price'])}\nДоставка EMU Post до пункта выдачи: {money(o['fee'])}\n"
+            f"<b>Итого: {money(p['price'] + o['fee'])}</b>")
 
 def customer_step(s, chat, msg):
     ses = s["sessions"].get(str(chat))
@@ -237,15 +249,17 @@ def customer_step(s, chat, msg):
            reply_markup={"keyboard": [[{"text": "📞 Отправить номер", "request_contact": True}]], "resize_keyboard": True, "one_time_keyboard": True})
     elif step == "phone" and (text or msg.get("contact")):
         ses["phone"] = msg["contact"]["phone_number"] if msg.get("contact") else text
-        ses["step"] = "address"
-        tg("sendMessage", chat_id=chat, text="Адрес доставки (область, город/район, улица, дом, индекс отделения EMU Post если знаете):", reply_markup={"remove_keyboard": True})
+        ses["step"] = "region"
+        tg("sendMessage", chat_id=chat, text="Принято.", reply_markup={"remove_keyboard": True})
+        rows = [[{"text": REGIONS[i][0], "callback_data": f"reg:{i}"} for i in range(j, min(j + 2, len(REGIONS)))] for j in range(0, len(REGIONS), 2)]
+        tg("sendMessage", chat_id=chat, text="В какую область доставить?", reply_markup={"inline_keyboard": rows})
     elif step == "address" and text:
         ses["address"] = text; ses["step"] = "comment"
         tg("sendMessage", chat_id=chat, text="Размер, цвет, количество или другие пожелания (или напишите «-»):")
     elif step == "comment" and text:
         oid = str(s["next_order"]); s["next_order"] += 1
         o = {"id": oid, "chat": chat, "pid": ses["pid"], "name": ses["name"], "phone": ses["phone"],
-             "address": ses["address"], "comment": "" if text == "-" else text, "status": "new", "user": ses.get("user")}
+             "address": ses["address"], "region": ses["region"], "fee": ses["fee"], "comment": "" if text == "-" else text, "status": "new", "user": ses.get("user")}
         s["orders"][oid] = o
         ses["step"] = "pay"; ses["oid"] = oid
         p = s["products"][o["pid"]]
@@ -278,6 +292,12 @@ def callback(s, cq):
                 s.setdefault("uzum_done", []).append(dd["uzum_id"])
             ans = "Пропущено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
+    elif act == "reg":
+        ses = s["sessions"].get(str(chat))
+        if ses and ses.get("step") == "region" and arg.isdigit() and int(arg) < len(REGIONS):
+            name, zone = REGIONS[int(arg)]
+            ses["region"] = name; ses["fee"] = delivery_fee(zone); ses["step"] = "address"
+            tg("sendMessage", chat_id=chat, text=f"{name}. Доставка до пункта выдачи EMU Post: {money(ses['fee'])}.\nНапишите город/район и адрес или номер пункта выдачи EMU Post, куда привезти:")
     elif act == "paid":
         ses = s["sessions"].get(str(chat))
         if ses and ses.get("oid") == arg:
