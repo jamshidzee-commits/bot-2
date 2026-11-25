@@ -137,7 +137,11 @@ def uzum_products():
     for sh in uzum_get("/v1/shops"):
         page = 0
         while page < 40:
-            j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
+            try:
+                j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
+            except requests.HTTPError as e:
+                print("UZUM shop", sh["id"], "->", e.response.status_code)
+                break
             lst = j.get("productList") or []
             for pr in lst:
                 skus = [k for k in pr.get("skuList", []) if (k.get("quantityAvailable") or 0) > 0 and not k.get("archived") and not k.get("blocked")]
