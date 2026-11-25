@@ -41,6 +41,7 @@ button{font:inherit;border:0;cursor:pointer}
 <header><input id="q" placeholder="Поиск товаров" oninput="render()"></header>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty" style="display:none">Товаров пока нет</div>
+<button id="cab" onclick="openCab()" style="display:none;position:fixed;right:12px;bottom:84px;z-index:6;width:48px;height:48px;border-radius:24px;background:#14141a;color:#fff;font-size:22px;box-shadow:0 2px 10px rgba(0,0,0,.3)">⚙️</button>
 <div class="bar" id="bar"><button onclick="openCart()" id="barBtn"></button></div>
 <div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div class="in" id="sheetIn"></div></div>
 <script>
@@ -62,6 +63,15 @@ function render(){
     <div class="title">${esc(p.title)}</div><button class="add">В корзину</button></div></div>`}).join("");
 }
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ADMIN=new URLSearchParams(location.search).get("admin")==="1";
+if(ADMIN)document.getElementById("cab").style.display="block";
+function go(p){const u=`https://t.me/${BOTU}?start=${p}`;if(tg&&tg.openTelegramLink){tg.openTelegramLink(u);setTimeout(()=>tg.close(),300);}else location.href=u;}
+function openCab(){
+  const rows=P.map(p=>`<div class="row"><img src="${p.photo}" alt=""><div class="t"><div>${esc(p.title)}</div>
+  <div class="note">№${p.id} · фото: ${(p.photos&&p.photos.length)||1} · ${fmt(p.price)}</div>
+  <div style="display:flex;gap:6px;margin-top:6px"><button class="opt" onclick="go('ph${p.id}')">📷 Добавить фото</button><button class="opt" onclick="go('rm${p.id}')">🗑 Удалить</button></div></div></div>`).join("");
+  show(`<h3 style="margin:0 0 6px">⚙️ Кабинет</h3><div class="note">Добавить фото: нажмите кнопку, затем отправьте фото боту. Товары и наличие подтягиваются из Uzum командами /uzum и /sync.</div>${rows||'<div class="empty">Товаров нет</div>'}`);
+}
 let cur=null,opt=0;
 function openP(id){
   cur=P.find(p=>p.id===id);opt=0;const p=cur;

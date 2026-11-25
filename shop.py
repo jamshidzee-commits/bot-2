@@ -120,6 +120,10 @@ def flush_albums(s):
             make_draft(s, a["photos"], a["caption"])
 
 def make_draft(s, photos, cap):
+    ap = s.get("add_pid")
+    if not cap and ap and time.time() - ap["t"] < 600:
+        s["add_pid"] = None
+        return add_photos(s, ap["pid"], photos)
     if cap and cap.strip().startswith("+"):
         return add_photos(s, cap.strip()[1:].split()[0], photos)
     d = parse_caption(cap)
@@ -520,6 +524,9 @@ def callback(s, cq):
                 s.setdefault("uzum_done", []).append(dd["uzum_id"])
             ans = "Пропущено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
+    elif act == "rm" and who == ADMIN:
+        ans = "Удалено" if remove_product(s, arg) else "Не найдено"
+        tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
     elif act == "checkout":
         items = cart_of(s, chat)
         if items:
@@ -568,12 +575,21 @@ def handle(s, u):
         return
     if text.startswith("/start"):
         arg = text.split(maxsplit=1)[1] if " " in text else ""
+        if (arg.startswith("ph") or arg.startswith("rm")) and uid == ADMIN:
+            pid = arg[2:]; p = s["products"].get(pid)
+            if not p:
+                return tg("sendMessage", chat_id=chat, text="Не нашёл такой товар. Список: /list")
+            if arg.startswith("ph"):
+                s["add_pid"] = {"pid": pid, "t": time.time()}
+                return tg("sendMessage", chat_id=chat, text=f"📷 «{p['title'][:50]}» сейчас {len(p.get('photos', []))} фото.\nПришлите новые фото (можно альбомом до 10 штук) в течение 10 минут.")
+            return tg("sendMessage", chat_id=chat, text=f"Удалить «{p['title'][:50]}» из канала и приложения?",
+                      reply_markup={"inline_keyboard": [[{"text": "🗑 Да, удалить", "callback_data": f"rm:{pid}"}, {"text": "Отмена", "callback_data": "x:0"}]]})
         if arg.startswith("c"):
             return start_cart(s, chat, msg["from"].get("username"), arg[1:])
         if arg.startswith("p"):
             return start_order(s, chat, msg["from"].get("username"), arg[1:])
         tg("sendMessage", chat_id=chat, text="Здравствуйте! Откройте магазин кнопкой ниже или выберите товар в нашем канале.",
-           reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "web_app": {"url": WEBAPP_URL}}]]})
+           reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "web_app": {"url": WEBAPP_URL + ("?admin=1" if uid == ADMIN else "")}}]]})
         return
     if uid == ADMIN:
         if text.startswith("/track"):
@@ -693,6 +709,8 @@ def main():
                     tg("editMessageReplyMarkup", chat_id=CHANNEL, message_id=p["msgs"][-1], reply_markup=product_kb(s, pid))
         export_catalog(s)
         tg("setChatMenuButton", menu_button={"type": "web_app", "text": "🛍 Магазин", "web_app": {"url": WEBAPP_URL}})
+        if ADMIN:  # у админа в приложении открывается ещё и кабинет
+            tg("setChatMenuButton", chat_id=int(ADMIN), menu_button={"type": "web_app", "text": "🛍 Магазин", "web_app": {"url": WEBAPP_URL + "?admin=1"}})
     except Exception as e:
         print("catalog/menu", e)
     if not ADMIN:
