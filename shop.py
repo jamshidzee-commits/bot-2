@@ -607,6 +607,24 @@ def callback(s, cq):
             tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
     tg("answerCallbackQuery", callback_query_id=cq["id"], text=ans)
 
+def relay_to_admin(s, msg):
+    """Чат с продавцом: сообщение покупателя (текст, фото, видео, голос…) уходит админу; админ отвечает реплаем."""
+    chat = msg["chat"]["id"]; fr = msg["from"]
+    name = " ".join(x for x in (fr.get("first_name"), fr.get("last_name")) if x) or "Покупатель"
+    head = f"💬 <b>{esc(name)}</b>" + (f" @{esc(fr['username'])}" if fr.get("username") else "") + f" · ID {fr['id']}\n<i>Ответьте реплаем на это сообщение или на его сообщение ниже.</i>"
+    r1 = tg("sendMessage", chat_id=int(ADMIN), parse_mode="HTML", text=head)
+    r2 = tg("copyMessage", chat_id=int(ADMIN), from_chat_id=chat, message_id=msg["message_id"])
+    cm = s.setdefault("chat_map", {})
+    for r in (r1, r2):
+        if r.get("ok"):
+            cm[str(r["result"]["message_id"])] = chat
+    while len(cm) > 800:
+        cm.pop(next(iter(cm)))
+    acks = s.setdefault("acks", {})
+    if time.time() - acks.get(str(chat), 0) > 600:
+        acks[str(chat)] = time.time()
+        tg("sendMessage", chat_id=chat, text="✅ Сообщение отправлено продавцу. Ответ придёт сюда, в этот чат. Можно присылать фото и видео.")
+
 def handle(s, u):
     if u.get("callback_query"):
         return callback(s, u["callback_query"])
@@ -632,9 +650,15 @@ def handle(s, u):
             return start_cart(s, chat, msg["from"].get("username"), arg[1:])
         if arg.startswith("p"):
             return start_order(s, chat, msg["from"].get("username"), arg[1:])
-        tg("sendMessage", chat_id=chat, text="Здравствуйте! Откройте магазин кнопкой ниже или выберите товар в нашем канале.",
+        tg("sendMessage", chat_id=chat, text="Здравствуйте! Откройте магазин кнопкой ниже или выберите товар в нашем канале.\n\n💬 Есть вопрос? Просто напишите сюда — продавец ответит. Можно присылать фото и видео.",
            reply_markup={"inline_keyboard": [[{"text": "🛍 Открыть магазин", "web_app": {"url": WEBAPP_URL + ("?admin=1" if uid == ADMIN else "")}}]]})
         return
+    if uid == ADMIN and msg.get("reply_to_message"):  # ответ продавца покупателю (на пересланное сообщение)
+        c = s.get("chat_map", {}).get(str(msg["reply_to_message"]["message_id"]))
+        if c:
+            r = tg("copyMessage", chat_id=c, from_chat_id=chat, message_id=msg["message_id"])
+            tg("sendMessage", chat_id=chat, text="✅ Отправлено покупателю" if r.get("ok") else "⚠️ Не доставлено (покупатель мог заблокировать бота)")
+            return
     if uid == ADMIN:
         if text.startswith("/track"):
             parts = text.split(maxsplit=2)
@@ -782,7 +806,10 @@ def handle(s, u):
         return
     if uid == ADMIN:
         return
-    tg("sendMessage", chat_id=chat, text="Выберите товар в канале и нажмите «🛒 Заказать».")
+    if text.startswith("/") or not ADMIN:
+        tg("sendMessage", chat_id=chat, text="Выберите товар в канале и нажмите «🛒 Заказать». Вопрос продавцу — просто напишите сюда.")
+        return
+    relay_to_admin(s, msg)
 
 def main():
     s = load(); end = time.time() + RUN_SECONDS
