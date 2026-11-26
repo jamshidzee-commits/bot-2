@@ -374,7 +374,17 @@ def uzum_products(my=None, need_stock=False):
             page += 1
     return out
 
-def uzum_offer(s, chat):
+def gallery_urls(key):
+    """Полная галерея из docs/img/g<key>-<n>.jpg (скачана с карточки Uzum), если есть."""
+    out = []
+    if os.path.isdir("docs/img"):
+        for f in os.listdir("docs/img"):
+            m = re.match(r"^g%s-(\d+)\.jpg$" % re.escape(str(key)), f)
+            if m:
+                out.append((int(m.group(1)), f))
+    return [WEBAPP_URL + "img/" + f for _, f in sorted(out)][:10]
+
+def uzum_offer(s, chat, show_all=False):
     if not UZUM_KEY:
         tg("sendMessage", chat_id=chat, text="Ключ Uzum не подключён (секрет UZUM_API_KEY).")
         return
@@ -387,9 +397,9 @@ def uzum_offer(s, chat):
         return
     done = set(s.setdefault("uzum_done", []))
     new = [i for i in items if i["id"] not in done]
-    tg("sendMessage", chat_id=chat, text=(f"Товаров в ваших поставках: {len(items)}" if s.get("mystock") else f"Товаров в наличии на Uzum: {len(items)}") + f", ещё не в канале: {len(new)}. Показываю до 10.")
+    tg("sendMessage", chat_id=chat, text=(f"Товаров в ваших поставках: {len(items)}" if s.get("mystock") else f"Товаров в наличии на Uzum: {len(items)}") + f", ещё не в канале: {len(new)}. Показываю " + ("все." if show_all else "до 10."))
     from concurrent.futures import ThreadPoolExecutor
-    batch = new[:10]
+    batch = new[:40] if show_all else new[:10]
     with ThreadPoolExecutor(8) as ex:
         for i in batch:
             i["photos"] = list(ex.map(best_img, i.get("photos") or [i["photo"]]))
@@ -397,6 +407,9 @@ def uzum_offer(s, chat):
         d = {"title": i["title"], "uzum": i["uzum"], "price": shop_price(i["uzum"]), "photos": i["photos"],
              "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"], "opts": i["opts"]}
         did = f"u{i['id']}"
+        g = gallery_urls(did)
+        if g:
+            d["photos"] = g
         s["drafts"][did] = d
         send_preview(s, chat, did)
 
@@ -713,7 +726,7 @@ def handle(s, u):
                 tg("sendMessage", chat_id=chat, text="Не получилось опубликовать в канале. Проверьте, что у бота есть право публикации и закрепления сообщений.")
             return
         if text.startswith("/uzum"):
-            return uzum_offer(s, chat)
+            return uzum_offer(s, chat, "all" in text.lower())
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
