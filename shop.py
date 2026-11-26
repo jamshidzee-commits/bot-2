@@ -368,7 +368,8 @@ def uzum_products(my=None, need_stock=False):
                         seen.add(u.split("/")[3]); photos.append(u)
                 if price and img:
                     out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
-                                "photo": img, "photos": photos[:10], "opts": opts[:12]})
+                                "photo": img, "photos": photos[:10], "opts": opts[:12],
+                                "codes": sorted({str(k.get("article") or k.get("sellerItemCode") or "") for k in skus} - {""})})
             if len(lst) < 20:
                 break
             page += 1
@@ -693,6 +694,17 @@ def handle(s, u):
             return
         if text.startswith("/sync"):
             return sync_stock(s, chat)
+        if text.startswith("/supply"):
+            items = uzum_products(s.get("mystock"), s.get("mystock_instock", False))
+            pub = {p.get("uzum_id"): (pid, p.get("hidden")) for pid, p in s["products"].items()}
+            lines = []
+            for i in items:
+                st = pub.get(i["id"])
+                mark = "✅ №%s" % st[0] if st and not st[1] else ("🙈 скрыт №%s" % st[0] if st else "—")
+                lines.append(f"{i['id']} · {', '.join(i.get('codes', []))[:40]} · {mark} · {(i['title'] or '')[:25]}")
+            for n in range(0, len(lines), 25):
+                tg("sendMessage", chat_id=chat, text="\n".join(lines[n:n+25]))
+            return
         if text.startswith("/gallery"):
             return apply_gallery(s, chat)
         if text.startswith("/names"):
