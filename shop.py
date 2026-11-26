@@ -138,6 +138,25 @@ def make_draft(s, photos, cap):
        reply_markup={"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
                                           {"text": "❌ Отмена", "callback_data": f"del:{did}"}]]})
 
+def product_kb(s, pid):
+    return {"inline_keyboard": [[{"text": "🛍 Открыть магазин", "url": f"https://t.me/{me(s)}/shop"}]]}
+
+def fix_photos(p):
+    """Приводит ссылки фото Uzum к рабочим (с размером), выбрасывает нерабочие и дубли."""
+    out, seen = [], set()
+    for u in p.get("photos", []):
+        v = best_img(u) if "images.uzum.uz" in u else u
+        ok = True
+        if "images.uzum.uz" in v:
+            try:
+                ok = requests.head(v, timeout=15, allow_redirects=True).status_code == 200
+            except Exception:
+                ok = False
+        if ok and v not in seen and (v.rsplit("/", 1)[0] not in seen):
+            seen.add(v); seen.add(v.rsplit("/", 1)[0]); out.append(v)
+    if out:
+        p["photos"] = out[:10]
+
 def post_to_channel(s, pid):
     d = s["products"][pid]
     kb = product_kb(s, pid)
@@ -212,7 +231,7 @@ def uzum_img(x):
 
 def best_img(url):
     """Берём самое крупное фото, которое реально отдаётся."""
-    base = url.rsplit("/", 1)[0]
+    base = url.rsplit("/", 1)[0] if re.search(r"\.(jpe?g|png|webp)$", url) else url.rstrip("/")  # у фото вариантов ссылка без имени файла
     for name in ("t_product_1080_high.jpg", "t_product_540_high.jpg"):  # original.jpg бывает слишком тяжёлым для Telegram
         try:
             if requests.head(f"{base}/{name}", timeout=15, allow_redirects=True).status_code == 200:
@@ -528,6 +547,16 @@ def handle(s, u):
             else:
                 tg("sendMessage", chat_id=chat, text="Формат: /track НОМЕР_ЗАКАЗА ТРЕК")
             return
+        if text.startswith("/repost"):
+            n = 0
+            for pid, p in s["products"].items():
+                if p.get("hidden") or p.get("msgs"):
+                    continue
+                fix_photos(p)
+                post_to_channel(s, pid); n += 1
+            export_catalog(s)
+            tg("sendMessage", chat_id=chat, text=f"Опубликовано в канале заново: {n} товаров. Закрепить кнопку магазина: /pin")
+            return
         if text.startswith("/delall"):
             n = sum(1 for pid in list(s["products"]) if not s["products"][pid].get("hidden") and remove_product(s, pid))
             tg("sendMessage", chat_id=chat, text=f"Убрано товаров из приложения: {n}. Их посты в канале, которые бот помнит, удалены. Остальные старые посты можно стереть командой /clearchannel yes")
@@ -618,7 +647,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Опубликовать в канал товары, которых там нет: /repost. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
