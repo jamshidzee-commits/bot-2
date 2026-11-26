@@ -646,6 +646,11 @@ def handle(s, u):
                 p["msgs"] = []
             tg("sendMessage", chat_id=chat, text=f"Удалено сообщений в канале: {n}. Закреплённую кнопку магазина верните командой /pin")
             return
+        if text.startswith("/redo"):
+            ids = re.findall(r"\d{5,}", text)
+            s["uzum_done"] = [x for x in s.get("uzum_done", []) if x not in ids]
+            tg("sendMessage", chat_id=chat, text=f"Вернул в очередь: {len(ids)}. Показываю карточки…")
+            return uzum_offer(s, chat, True)
         if text.startswith("/find"):
             q = text[5:].strip().lower().split()
             res = []
