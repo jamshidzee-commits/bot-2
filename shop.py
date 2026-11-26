@@ -646,6 +646,29 @@ def handle(s, u):
                 p["msgs"] = []
             tg("sendMessage", chat_id=chat, text=f"Удалено сообщений в канале: {n}. Закреплённую кнопку магазина верните командой /pin")
             return
+        if text.startswith("/find"):
+            q = text[5:].strip().lower().split()
+            res = []
+            for sh in uzum_get("/v1/shops"):
+                page = 0
+                while page < 40:
+                    try:
+                        j = uzum_get(f"/v1/product/shop/{sh['id']}", searchQuery="", filter="ALL", sortBy="DEFAULT", order="ASC", size=20, page=page)
+                    except requests.HTTPError:
+                        break
+                    lst = j.get("productList") or []
+                    for pr in lst:
+                        for k in pr.get("skuList", []):
+                            blob = " ".join(str(x) for x in (k.get("article"), k.get("sellerItemCode"), k.get("skuTitle"), k.get("skuFullTitle"), k.get("barcode"), pr.get("title"))).lower()
+                            if any(w in blob for w in q):
+                                res.append(f"{pr.get('productId')} · sku {k.get('skuId')} · {k.get('article') or k.get('sellerItemCode')} · {(k.get('skuTitle') or '')[:20]} · ост {k.get('quantityAvailable')} · {'в боте' if str(pr.get('productId')) in {p.get('uzum_id') for p in s['products'].values()} else 'нет в боте'}")
+                    if len(lst) < 20:
+                        break
+                    page += 1
+            res = list(dict.fromkeys(res))
+            for n in range(0, max(len(res), 1), 25):
+                tg("sendMessage", chat_id=chat, text="\n".join(res[n:n+25]) or "Ничего не найдено.")
+            return
         if text.startswith("/supply"):
             nums = [c for c in re.split(r"[\s,;]+", text[len("/supply"):].strip()) if c]
             if not nums:
