@@ -123,7 +123,10 @@ def make_draft(s, photos, cap):
     ap = s.get("add_pid")
     if not cap and ap and time.time() - ap["t"] < 600:
         s["add_pid"] = None
-        return add_photos(s, ap["pid"], photos)
+        return add_to_draft(s, ap["draft"], photos) if ap.get("draft") else add_photos(s, ap["pid"], photos)
+    ld = s.get("last_draft")
+    if not cap and ld and time.time() - ld["t"] < 1800 and ld["did"] in s["drafts"]:  # фото без подписи = к последней показанной карточке
+        return add_to_draft(s, ld["did"], photos)
     if cap and cap.strip().startswith("+"):
         return add_photos(s, cap.strip()[1:].split()[0], photos)
     d = parse_caption(cap)
@@ -179,13 +182,48 @@ def post_to_channel(s, pid):
             msgs.append(r["result"]["message_id"])
     d["msgs"] = msgs
 
-def add_photos(s, pid, fids):
-    """Дополнительные фото к опубликованному товару: сохраняем в docs/img (для приложения) и переопубликуем пост."""
-    p = s["products"].get(pid)
-    if not p:
-        tg("sendMessage", chat_id=ADMIN, text="Не нашёл такой товар. Номера: /list"); return
+def send_preview(s, chat, did):
+    """Карточка-предпросмотр для админа: фото/альбом + текст + кнопки."""
+    d = s["drafts"][did]
+    ids = d.get("photo_ids", {})
+    cap = product_caption(d) + f"\n\n(на Uzum: {money(d.get('uzum', 0))}, фото: {len(d['photos'])})"
+    kb = {"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
+                               {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}],
+                              [{"text": "📷 Добавить фото", "callback_data": f"ph:{did}"}]]}
+    s["last_draft"] = {"did": did, "t": time.time()}
+    small = [u.rsplit("/", 1)[0] + "/t_product_540_high.jpg" if ("images.uzum.uz" in u and re.search(r"\.jpe?g$", u)) else u for u in d["photos"]]
+    ok = False
+    for urls in (d["photos"], small):
+        send = [ids.get(u, u) for u in urls][:10]
+        if len(send) > 1:
+            media = [{"type": "photo", "media": u} for u in send]
+            media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
+            ok = tg("sendMediaGroup", chat_id=chat, media=media).get("ok")
+            if ok:
+                d["photos"] = urls
+                tg("sendMessage", chat_id=chat, text=f"👆 {d['title'][:60]}", reply_markup=kb)
+                break
+        else:
+            ok = tg("sendPhoto", chat_id=chat, photo=send[0], parse_mode="HTML", caption=cap, reply_markup=kb).get("ok")
+            if ok:
+                d["photos"] = urls
+                break
+    if not ok:  # последний шанс: скачиваем первое фото и загружаем сами
+        try:
+            img = requests.get(small[0], timeout=40).content
+            ok = requests.post(TG + "sendPhoto", data={"chat_id": chat, "parse_mode": "HTML", "caption": cap, "reply_markup": json.dumps(kb)},
+                               files={"photo": ("p.jpg", img)}, timeout=60).ok
+            if ok:
+                d["photos"] = small[:1]
+        except Exception as e:
+            print("photo fallback", type(e).__name__)
+    if not ok:
+        tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{d['title']}»")
+
+def attach_photos(obj, key, fids):
+    """Скачивает присланные фото в docs/img (для приложения) и добавляет к карточке/товару."""
     os.makedirs("docs/img", exist_ok=True)
-    p.setdefault("photo_ids", {})
+    obj.setdefault("photo_ids", {})
     for n, fid in enumerate(fids):
         info = tg("getFile", file_id=fid).get("result") or {}
         if not info.get("file_path"):
@@ -194,11 +232,25 @@ def add_photos(s, pid, fids):
             data = requests.get(f"https://api.telegram.org/file/bot{TOKEN}/{info['file_path']}", timeout=60).content
         except Exception as e:
             print("download", type(e).__name__); continue
-        name = f"{pid}_{int(time.time())}_{n}.jpg"
+        name = f"{key}_{int(time.time())}_{n}.jpg"
         open(f"docs/img/{name}", "wb").write(data)
         url = WEBAPP_URL + "img/" + name
-        p["photos"].append(url); p["photo_ids"][url] = fid
-    p["photos"] = p["photos"][:10]
+        obj["photos"].append(url); obj["photo_ids"][url] = fid
+    obj["photos"] = obj["photos"][:10]
+
+def add_to_draft(s, did, fids):
+    d = s["drafts"].get(did)
+    if not d:
+        tg("sendMessage", chat_id=ADMIN, text="Эта карточка уже обработана."); return
+    attach_photos(d, did, fids)
+    send_preview(s, ADMIN, did)
+
+def add_photos(s, pid, fids):
+    """Дополнительные фото к опубликованному товару: сохраняем в docs/img (для приложения) и переопубликуем пост."""
+    p = s["products"].get(pid)
+    if not p:
+        tg("sendMessage", chat_id=ADMIN, text="Не нашёл такой товар. Номера: /list"); return
+    attach_photos(p, pid, fids)
     for m in p.get("msgs", []):
         tg("deleteMessage", chat_id=CHANNEL, message_id=m)
     post_to_channel(s, pid)
@@ -318,36 +370,7 @@ def uzum_offer(s, chat):
              "desc": ("Варианты: " + "; ".join(i["opts"])) if i["opts"] else "", "uzum_id": i["id"], "opts": i["opts"]}
         did = f"u{i['id']}"
         s["drafts"][did] = d
-        cap = product_caption(d) + f"\n\n(на Uzum: {money(d['uzum'])}, фото: {len(d['photos'])})"
-        kb = {"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{did}"},
-                                   {"text": "⏭ Пропустить", "callback_data": f"del:{did}"}]]}
-        ok = False
-        small = [u.rsplit("/", 1)[0] + "/t_product_540_high.jpg" if "images.uzum.uz" in u else u for u in d["photos"]]
-        for urls in (d["photos"], small):
-            if len(urls) > 1:
-                media = [{"type": "photo", "media": u} for u in urls]
-                media[0]["caption"] = cap; media[0]["parse_mode"] = "HTML"
-                ok = tg("sendMediaGroup", chat_id=chat, media=media).get("ok")
-                if ok:
-                    d["photos"] = urls
-                    tg("sendMessage", chat_id=chat, text=f"👆 {i['title'][:60]}", reply_markup=kb)
-                    break
-            else:
-                ok = tg("sendPhoto", chat_id=chat, photo=urls[0], parse_mode="HTML", caption=cap, reply_markup=kb).get("ok")
-                if ok:
-                    d["photos"] = urls
-                    break
-        if not ok:  # последний шанс: скачиваем первое фото и загружаем сами
-            try:
-                img = requests.get(small[0], timeout=40).content
-                ok = requests.post(TG + "sendPhoto", data={"chat_id": chat, "parse_mode": "HTML", "caption": cap, "reply_markup": json.dumps(kb)},
-                                   files={"photo": ("p.jpg", img)}, timeout=60).ok
-                if ok:
-                    d["photos"] = small[:1]
-            except Exception as e:
-                print("photo fallback", type(e).__name__)
-        if not ok:
-            tg("sendMessage", chat_id=chat, text=f"Не удалось показать фото для «{i['title']}»")
+        send_preview(s, chat, did)
 
 # ---------- покупатель: заказ ----------
 def cart_of(s, chat):
@@ -470,6 +493,11 @@ def callback(s, cq):
                 s.setdefault("uzum_done", []).append(dd["uzum_id"])
             ans = "Пропущено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
+    elif act == "ph" and who == ADMIN:
+        if arg in s["drafts"]:
+            s["add_pid"] = {"draft": arg, "t": time.time()}
+            tg("sendMessage", chat_id=chat, text="📷 Пришлите фото этого товара (можно сразу несколько, альбомом). Я добавлю их к карточке.")
+        ans = "Жду фото"
     elif act == "rm" and who == ADMIN:
         ans = "Удалено" if remove_product(s, arg) else "Не найдено"
         tg("editMessageReplyMarkup", chat_id=chat, message_id=cq["message"]["message_id"], reply_markup={"inline_keyboard": []})
