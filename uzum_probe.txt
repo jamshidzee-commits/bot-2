@@ -1,49 +1,40 @@
-всего счетов получено: 1050
-110004288###: совпадений 7
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-   номер длиной 13, статус CREATED, строк 2, sku 28, sku с qty>0 28, штук по строкам 73, штук по sku 73, totalToStock 73
-110004284###: совпадений 7
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-   номер длиной 13, статус CREATED, строк 7, sku 49, sku с qty>0 49, штук по строкам 83, штук по sku 83, totalToStock 83
-110004279###: совпадений 7
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-   номер длиной 13, статус CREATED, строк 4, sku 29, sku с qty>0 29, штук по строкам 42, штук по sku 42, totalToStock 42
-110004266###: совпадений 7
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-   номер длиной 13, статус CREATED, строк 8, sku 37, sku с qty>0 37, штук по строкам 89, штук по sku 89, totalToStock 89
-110004264###: совпадений 7
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 52, sku с qty>0 52, штук по строкам 93, штук по sku 93, totalToStock 93
-110004263###: совпадений 7
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
-   номер длиной 13, статус CREATED, строк 10, sku 67, sku с qty>0 67, штук по строкам 93, штук по sku 93, totalToStock 93
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=20 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=10 с photo=0 разных photo=0 образец=None
+товар: sku=22 с photo=0 разных photo=0 образец=None
+товар: sku=1 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=1 с photo=0 разных photo=0 образец=None
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=9 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=10 с photo=0 разных photo=0 образец=None
+товар: sku=6 с photo=0 разных photo=0 образец=None
+товар: sku=2 с photo=0 разных photo=0 образец=None
+товар: sku=2 с photo=0 разных photo=0 образец=None
+товар: sku=14 с photo=0 разных photo=0 образец=None
+товар: sku=2 с photo=0 разных photo=0 образец=None
+товар: sku=10 с photo=0 разных photo=0 образец=None
+товар: sku=1 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=12 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=2 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=2 с photo=0 разных photo=0 образец=None
+товар: sku=6 с photo=0 разных photo=0 образец=None
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=3 с photo=0 разных photo=0 образец=None
+товар: sku=8 с photo=0 разных photo=0 образец=None
+товар: sku=15 с photo=0 разных photo=0 образец=None
+товар: sku=4 с photo=0 разных photo=0 образец=None
+товар: sku=10 с photo=0 разных photo=0 образец=None
+товар: sku=11 с photo=0 разных photo=0 образец=None
