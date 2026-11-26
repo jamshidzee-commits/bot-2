@@ -155,8 +155,9 @@ def fix_photos(p):
                 ok = requests.head(v, timeout=15, allow_redirects=True).status_code == 200
             except Exception:
                 ok = False
-        if ok and v not in seen and (v.rsplit("/", 1)[0] not in seen):
-            seen.add(v); seen.add(v.rsplit("/", 1)[0]); out.append(v)
+        base = v.rsplit("/", 1)[0] if "images.uzum.uz" in v else v  # дубли ищем только среди ссылок Uzum
+        if ok and v not in seen and base not in seen:
+            seen.add(v); seen.add(base); out.append(v)
     if out:
         p["photos"] = out[:10]
 
