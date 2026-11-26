@@ -257,6 +257,33 @@ def add_photos(s, pid, fids):
     export_catalog(s)
     tg("sendMessage", chat_id=ADMIN, text=f"Добавлено фото. Теперь у товара «{p['title'][:40]}» {len(p['photos'])} фото. Пост в канале обновлён, в приложении фото появятся через 1–2 минуты.")
 
+def apply_gallery(s, chat):
+    """Полные галереи из docs/img/g<номер>-<n>.jpg (скачаны с карточек Uzum): заменяют фото товаров, посты в канале обновляются."""
+    files = {}
+    if os.path.isdir("docs/img"):
+        for f in os.listdir("docs/img"):
+            m = re.match(r"^g(\d+)-(\d+)\.jpg$", f)
+            if m:
+                files.setdefault(m.group(1), []).append((int(m.group(2)), f))
+    done = []
+    for pid, lst in sorted(files.items(), key=lambda x: int(x[0])):
+        p = s["products"].get(pid)
+        if not p:
+            continue
+        urls = [WEBAPP_URL + "img/" + f for _, f in sorted(lst)][:10]
+        if p.get("photos") == urls:
+            continue
+        p["photos"] = urls
+        p["photo_ids"] = {}
+        if p.get("msgs"):
+            for m in p["msgs"]:
+                tg("deleteMessage", chat_id=CHANNEL, message_id=m)
+            post_to_channel(s, pid)
+            time.sleep(1.5)
+        done.append(f"{pid}: {len(urls)}")
+    export_catalog(s)
+    tg("sendMessage", chat_id=chat, text=("Галереи обновлены (товар: фото):\n" + "\n".join(done) + "\n\nВ приложении фото появятся через 1–2 минуты. Товары, которых ещё нет в канале: /repost") if done else "Новых галерей нет.")
+
 def publish(s, did):
     d = s["drafts"].pop(did, None)
     if not d:
@@ -652,6 +679,8 @@ def handle(s, u):
             return
         if text.startswith("/sync"):
             return sync_stock(s, chat)
+        if text.startswith("/gallery"):
+            return apply_gallery(s, chat)
         if text.startswith("/names"):
             n = 0
             for pid, p in s["products"].items():
@@ -687,7 +716,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Опубликовать в канал товары, которых там нет: /repost. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Фото-названия: /names. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Опубликовать в канал товары, которых там нет: /repost. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Фото-названия: /names. Полные галереи: /gallery. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
