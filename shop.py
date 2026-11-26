@@ -263,12 +263,12 @@ def apply_gallery(s, chat):
     files = {}
     if os.path.isdir("docs/img"):
         for f in os.listdir("docs/img"):
-            m = re.match(r"^g(\d+)-(\d+)\.jpg$", f)
+            m = re.match(r"^g(u?\d+)-(\d+)\.jpg$", f)
             if m:
                 files.setdefault(m.group(1), []).append((int(m.group(2)), f))
     done = []
-    for pid, lst in sorted(files.items(), key=lambda x: int(x[0])):
-        p = s["products"].get(pid)
+    for pid, lst in sorted(files.items(), key=lambda x: int(x[0].lstrip("u"))):
+        p = s["products"].get(pid) or s["drafts"].get(pid)  # u<номер> — ещё не опубликованные карточки
         if not p:
             continue
         urls = [WEBAPP_URL + "img/" + f for _, f in sorted(lst)][:10]
