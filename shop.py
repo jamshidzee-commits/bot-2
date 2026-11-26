@@ -652,6 +652,18 @@ def handle(s, u):
             return
         if text.startswith("/sync"):
             return sync_stock(s, chat)
+        if text.startswith("/names"):
+            n = 0
+            for pid, p in s["products"].items():
+                if p.get("hidden") or not p.get("photos"):
+                    continue
+                ph = (p.get("photo_ids") or {}).get(p["photos"][0], p["photos"][0])
+                cap = f"<b>№{esc(pid)}</b> · {esc(p['title'][:120])}\n\nНазови свои фото: {esc(pid)}-1, {esc(pid)}-2, {esc(pid)}-3…"
+                r = tg("sendPhoto", chat_id=chat, photo=ph, parse_mode="HTML", caption=cap)
+                n += 1 if r.get("ok") else 0
+                time.sleep(0.6)
+            tg("sendMessage", chat_id=chat, text=f"Готово: {n} товаров. Назови фото на компьютере как № + номер, например 13-1.jpg, 13-2.jpg, и положи в D:\\m\\магазин. Потом напиши мне «готово».")
+            return
         if text.startswith("/list"):
             lines = [f"{pid}. {p['title'][:50]} — {money(p['price'])}" for pid, p in s["products"].items() if not p.get("hidden")]
             tg("sendMessage", chat_id=chat, text=("Товары в магазине:\n" + "\n".join(lines) + "\n\nУдалить: /del НОМЕР") if lines else "Товаров нет.")
@@ -675,7 +687,7 @@ def handle(s, u):
         if msg.get("photo"):
             return admin_photo(s, msg)
         if text.startswith("/help") or text.startswith("/admin"):
-            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Опубликовать в канал товары, которых там нет: /repost. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
+            tg("sendMessage", chat_id=chat, text="Чтобы добавить товар, пришлите фото (можно несколько) с подписью:\nНазвание | цена на Uzum | описание\nЦена в канале будет на %g%% ниже. Товары из Uzum: /uzum. Товары из поставок: /supply НОМЕРА. Удалить всё: /delall. Опубликовать в канал товары, которых там нет: /repost. Добавить фото к товару: пришлите фото с подписью +НОМЕР (номер из /list). «Мой склад» по кодам: /mystock. Фото-названия: /names. Список: /list, удалить: /del НОМЕР, проверка наличия: /sync, закрепить магазин: /pin. Трек-номер: /track НОМЕР ТРЕК" % DISCOUNT)
             return
     if customer_step(s, chat, msg):
         return
