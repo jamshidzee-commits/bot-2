@@ -326,12 +326,20 @@ UZUM_MATCHED = set()
 def sku_codes(k):
     return {str(x).strip() for x in (k.get("skuId"), k.get("barcode"), k.get("sellerItemCode"), k.get("article")) if x not in (None, "")}
 
+def load_supply():
+    """Состав поставок: {skuId: {"q": штук, "c": артикул}} — из supply.json (цены закупки не храним)."""
+    try:
+        return json.load(open("supply.json", encoding="utf-8"))
+    except Exception:
+        return {}
+
 def uzum_products(my=None, need_stock=False):
     """Все товары всех магазинов продавца, в наличии."""
     global UZUM_ERRORS, UZUM_MATCHED
     UZUM_ERRORS = 0
     UZUM_MATCHED = set()
-    my = set(my) if my else None
+    SUP = load_supply()
+    my = set(SUP) if SUP else (set(my) if my else None)
     out = []
     for sh in uzum_get("/v1/shops"):
         page = 0
@@ -359,6 +367,9 @@ def uzum_products(my=None, need_stock=False):
                 opts = []
                 for k in skus:
                     c = (k.get("characteristics") or k.get("skuTitle") or "").strip()
+                    q = (SUP.get(str(k.get("skuId"))) or {}).get("q")
+                    if c and q:
+                        c = f"{c} — {q} шт"
                     if c and c not in opts:
                         opts.append(c)
                 img = uzum_img(pr.get("image") or pr.get("previewImg") or (skus[0].get("previewImage")))
@@ -368,12 +379,29 @@ def uzum_products(my=None, need_stock=False):
                         seen.add(u.split("/")[3]); photos.append(u)
                 if price and img:
                     out.append({"id": str(pr["productId"]), "title": pr.get("title") or skus[0].get("productTitle"), "uzum": int(price),
-                                "photo": img, "photos": photos[:10], "opts": opts[:12],
+                                "photo": img, "photos": photos[:10], "opts": opts[:40],
                                 "codes": sorted({str(k.get("article") or k.get("sellerItemCode") or "") for k in skus} - {""})})
             if len(lst) < 20:
                 break
             page += 1
     return out
+
+def sync_stock(s, chat=None):
+    """Обновляет варианты и наличие у товаров по составу поставок (supply.json)."""
+    if not UZUM_KEY:
+        return
+    items = uzum_products(None)
+    by = {i["id"]: i for i in items}
+    n = 0
+    for pid, p in s["products"].items():
+        i = by.get(p.get("uzum_id"))
+        if not i or not i["opts"] or p.get("opts") == i["opts"]:
+            continue
+        p["opts"] = i["opts"]; p["desc"] = "Варианты: " + "; ".join(i["opts"]); n += 1
+    if n:
+        export_catalog(s)
+    if chat:
+        tg("sendMessage", chat_id=chat, text=f"Наличие обновлено у {n} товаров (по составу поставок).")
 
 def gallery_urls(key):
     """Полная галерея из docs/img/g<key>-<n>.jpg (скачана с карточки Uzum), если есть."""
@@ -436,7 +464,7 @@ def start_cart(s, chat, user, code):
                 continue
             oi, q = int(oi), max(1, min(int(q), 20))
             opts = p.get("opts") or []
-            items.append({"pid": pid, "qty": q, "note": opts[oi] if oi < len(opts) else ""})
+            items.append({"pid": pid, "qty": q, "note": opts[oi].split(" — ")[0] if oi < len(opts) else ""})
         except Exception:
             continue
     if not items:
@@ -673,28 +701,6 @@ def handle(s, u):
             res = list(dict.fromkeys(res))
             for n in range(0, max(len(res), 1), 25):
                 tg("sendMessage", chat_id=chat, text="\n".join(res[n:n+25]) or "Ничего не найдено.")
-            return
-        if text.startswith("/supply"):
-            nums = [c for c in re.split(r"[\s,;]+", text[len("/supply"):].strip()) if c]
-            if not nums:
-                tg("sendMessage", chat_id=chat, text="Пришлите номера поставок Uzum:\n/supply 110004288155 110004284738 ...")
-                return
-            try:
-                codes, found, hint, qty, per = supply_codes(nums)
-            except Exception as e:
-                tg("sendMessage", chat_id=chat, text=f"Ошибка Uzum: {type(e).__name__}"); return
-            miss = [n for n in nums if n not in found]
-            if not codes:
-                tg("sendMessage", chat_id=chat, text=f"Поставки не найдены или пустые. Не найдены: {', '.join(miss) or '—'}. Поля: {hint}")
-                return
-            s["mystock"] = sorted(codes); s["stock_qty"] = qty; s["mystock_instock"] = False  # остаток на складе Uzum не важен: твоя наличие = то, что в поставках
-            try:
-                items = uzum_products(s["mystock"], False)
-            except Exception as e:
-                tg("sendMessage", chat_id=chat, text=f"Поставки прочитаны, но Uzum не ответил: {type(e).__name__}"); return
-            tg("sendMessage", chat_id=chat, text=f"Поставок найдено: {len(found)} из {len(nums)}" + (f" (нет: {', '.join(miss)})" if miss else "") +
-               f".\nВсего штук: {sum(qty.values())} (" + " + ".join(str(per.get(n, 0)) for n in nums) + f").\nТоваров: {len(items)}, размеров/вариантов: {len(codes)}.\n\nПоказать для публикации: /uzum\nОтключить фильтр: /mystock clear")
-            sync_stock(s, chat)  # сразу убираем ранее опубликованные товары, которых нет в поставках
             return
         if text.startswith("/mystock"):
             body = text[len("/mystock"):].strip()
