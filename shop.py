@@ -27,7 +27,8 @@ def delivery_fee(zone, kg=None):
 
 def load():
     try:
-        s = json.load(open(STATE, encoding="utf-8"))
+        raw = open(STATE, encoding="utf-8").read().replace("github.io/online-shop-bot/", "github.io/bot-2/")  # репозиторий переименован
+        s = json.loads(raw)
     except Exception:
         s = {}
     s.setdefault("offset", 0); s.setdefault("products", {}); s.setdefault("orders", {})
@@ -85,7 +86,7 @@ def export_catalog(s):
         items.append({"id": pid, "title": p["title"], "price": p["price"], "old": p.get("uzum", 0), "photo": ph, "photos": [u for u in p.get("photos", []) if u.startswith("http")],
                       "opts": p.get("opts", []), "desc": p.get("desc", "")})
     os.makedirs("docs", exist_ok=True)
-    data = json.dumps({"bot": me(s), "products": items[::-1]}, ensure_ascii=False)
+    data = json.dumps({"bot": me(s), "products": items[::-1]}, ensure_ascii=False).replace("github.io/online-shop-bot/", "github.io/bot-2/")
     try:
         if open("docs/products.json", encoding="utf-8").read() == data:
             return
