@@ -73,7 +73,7 @@ def product_caption(p):
         t += f'\n\n👆👆👆 <a href="https://t.me/{CHANNEL.lstrip("@")}">Перейти в канал и подписаться / Kanalga o\'tish va obuna bo\'lish</a>'
     return t
 
-WEBAPP_URL = os.environ.get("WEBAPP_URL") or "https://jamshidzee-commits.github.io/online-shop-bot/"
+WEBAPP_URL = os.environ.get("WEBAPP_URL") or "https://jamshidzee-commits.github.io/bot-2/"
 
 def export_catalog(s):
     """Каталог для мини-приложения (docs/products.json) — только товары с фото-ссылкой."""
