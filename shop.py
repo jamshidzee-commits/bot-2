@@ -65,6 +65,10 @@ def me(s):
         s["me"] = tg("getMe").get("result", {}).get("username", "")
     return s["me"]
 
+def pay_info_html():
+    """Реквизиты; номер карты в <code> — по нажатию копируется."""
+    return re.sub(r"\d{4}(?:[ -]?\d{4}){2,4}", lambda m: "<code>" + m.group(0) + "</code>", esc(PAY_INFO))
+
 def product_caption(p):
     t = f"<b>{esc(p['title'])}</b>\n"
     if p.get("desc"):
@@ -539,7 +543,7 @@ def customer_step(s, chat, msg):
         s["carts"][str(chat)] = []
         ses["step"] = "pay"; ses["oid"] = oid
         tg("sendMessage", chat_id=chat, parse_mode="HTML",
-           text=order_text(s, o) + f"\n\n💳 Оплата:\n{esc(PAY_INFO)}\n\nПосле оплаты нажмите кнопку и пришлите скриншот чека.",
+           text=order_text(s, o) + f"\n\n💳 Оплата:\n{pay_info_html()}\n\nПосле оплаты нажмите кнопку и пришлите скриншот чека.",
            reply_markup={"inline_keyboard": [[{"text": "✅ Я оплатил(а)", "callback_data": f"paid:{oid}"}]]})
     elif step == "receipt" and (msg.get("photo") or msg.get("document")):
         oid = ses["oid"]; o = s["orders"][oid]; o["status"] = "paid_wait"
