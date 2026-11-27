@@ -69,6 +69,8 @@ def product_caption(p):
     if p.get("desc"):
         t += f"\n{esc(p['desc'])}\n"
     t += f"\n💰 Цена: <b>{money(p['price'])}</b>\n🚚 Доставка EMU Post — платная (считается при заказе)"
+    if CHANNEL.startswith("@"):
+        t += f'\n\n👆👆👆 <a href="https://t.me/{CHANNEL.lstrip("@")}">Перейти в канал и подписаться / Kanalga o\'tish va obuna bo\'lish</a>'
     return t
 
 WEBAPP_URL = os.environ.get("WEBAPP_URL") or "https://jamshidzee-commits.github.io/online-shop-bot/"
